@@ -1,0 +1,10 @@
+openapi: 3.1.0
+info:
+  title: ASE Lab 2 Ride-hailing API
+  version: 0.0.0-draft
+  description: >-
+    网约车平台 HTTP 接口设计骨架。服务边界与核心接口尚未确定，
+    paths 为空；本文档不表示已提供任何可调用的业务接口。
+# 服务划分确定后补充路径、请求/响应、示例、错误码、权限及幂等约定。
+# 如需按服务拆分契约，可在本目录组织多个 OpenAPI 文件。
+paths: {}

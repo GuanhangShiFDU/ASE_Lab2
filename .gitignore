@@ -1,0 +1,21 @@
+# Local operating system files
+.DS_Store
+Thumbs.db
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+
+# Local editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Optional local tooling dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Diagram sources and exported images are deliverables; keep them tracked.

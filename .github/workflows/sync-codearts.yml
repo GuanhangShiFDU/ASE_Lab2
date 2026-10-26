@@ -1,0 +1,58 @@
+name: Sync master to CodeArts
+
+'on':
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-codearts-master
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out current master with full history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          # Queued/manual runs also sync the latest master, never an old event SHA.
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Push master to CodeArts
+        shell: bash
+        env:
+          CODEARTS_SSH_PRIVATE_KEY: ${{ secrets.CODEARTS_SSH_PRIVATE_KEY }}
+          CODEARTS_REPOSITORY: git@codehub.devcloud.cn-north-4.huaweicloud.com:c1aa0a224dba4c2591226b87a5af9407/lab2.git
+        run: |
+          set -euo pipefail
+          if [[ -z "$CODEARTS_SSH_PRIVATE_KEY" ]]; then
+            echo '::error::Add the CODEARTS_SSH_PRIVATE_KEY repository Actions secret first.'
+            exit 1
+          fi
+
+          umask 077
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/codearts-sync.XXXXXX")
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$CODEARTS_SSH_PRIVATE_KEY" | tr -d '\r' > "$ssh_dir/key"
+          unset CODEARTS_SSH_PRIVATE_KEY
+          ssh-keygen -y -P '' -f "$ssh_dir/key" > /dev/null
+          cp .github/codearts_known_hosts "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -F /dev/null -i \"$ssh_dir/key\" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=\"$ssh_dir/known_hosts\" -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=20"
+
+          # No force or mirror: independent CodeArts changes must be reconciled.
+          git push "$CODEARTS_REPOSITORY" HEAD:refs/heads/master
+          local_sha=$(git rev-parse HEAD)
+          remote_sha=$(git ls-remote "$CODEARTS_REPOSITORY" refs/heads/master | awk '{print $1}')
+          if [[ "$local_sha" != "$remote_sha" ]]; then
+            echo '::error::CodeArts master differs from the checked-out commit. Inspect the remote before retrying.'
+            exit 1
+          fi
+          printf 'Synced master to CodeArts: `%s`\n' "$local_sha" >> "$GITHUB_STEP_SUMMARY"

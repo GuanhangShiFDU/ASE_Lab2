@@ -1,0 +1,93 @@
+# Lab 2：网约车平台微服务架构设计
+
+2026 高级软件工程 · 第 22 小组
+
+> 当前阶段：文档与契约框架。服务划分、业务规则、图和契约尚待讨论、编写及评审，不代表已完成设计。
+
+## 作业范围
+
+为面向乘客、司机和运营人员的网约车平台完成领域分析、微服务与数据归属、服务通信、业务流程与契约设计，并汇总为系统整体架构图。
+
+- [作业要求](https://openmsg.yuque.com/openmsg/gp3cfs/eyuag71f933gx041)
+- 截止日期：2026-11-02，以课程后续通知为准。
+- 本次无需实现业务代码，无需完整物理表结构或建表 SQL。
+- 沿用原课程小组和 CodeArts 项目，使用独立的 Lab 2 仓库。
+
+## 小组成员及分工
+
+以下沿用 Lab 1 的小组成员；本次分工待组内确认后填写，不能用上次分工代替本次实际贡献。
+
+| 成员 | 学号 | Lab 2 负责内容 | 复核内容 |
+| --- | --- | --- | --- |
+| 史冠航（组长） | 26113050105 | 待确认 | 待确认 |
+| 刘乐翔 | 26113050085 | 待确认 | 待确认 |
+| 刘子扬 | 26113050091 | 待确认 | 待确认 |
+| 李全昊 | 26113050071 | 待确认 | 待确认 |
+| 杨润东 | 26213050435 | 待确认 | 待确认 |
+
+## 仓库与交付入口
+
+- GitHub：[ASE_Lab2](https://github.com/GuanhangShiFDU/ASE_Lab2)
+- CodeArts 项目：`2026高级软件工程_第22小组`。
+- CodeArts 仓库：`lab2`；网页链接待补充。
+- CodeArts SSH：`git@codehub.devcloud.cn-north-4.huaweicloud.com:c1aa0a224dba4c2591226b87a5af9407/lab2.git`。
+- [设计报告](docs/design.md)：按作业四项设计组织正文，并收录整体架构图。
+- [绘图约定](docs/diagrams/README.md)：图源、导出文件及报告引用方式。
+- [契约入口](contracts/README.md)：核心接口与业务事件。
+
+```text
+ASE_Lab2/
+├── README.md
+├── LICENSE
+├── docs/
+│   ├── design.md
+│   └── diagrams/
+│       └── README.md
+└── contracts/
+    ├── README.md
+    ├── http/
+    │   └── openapi.yaml
+    └── events/
+        └── README.md
+```
+
+最终还需在仓库根目录生成 `architecture.png`，并嵌入 `docs/design.md`。目前未生成占位图片；时序图和数据模型图也将在设计后补齐。
+
+## GitHub → CodeArts 同步
+
+通过 `.github/workflows/sync-codearts.yml` 将 GitHub 的 `master` 单向同步至 CodeArts 的 `lab2/master`；也可在 GitHub Actions 中手动运行 `Sync master to CodeArts`。
+
+首次启用：
+
+1. 在本 GitHub 仓库的 **Settings → Secrets and variables → Actions** 创建 Repository secret：`CODEARTS_SSH_PRIVATE_KEY`，填入用于 Actions 同步的 SSH 私钥完整内容。
+2. 该私钥对应的公钥需已添加到 CodeArts，所属账号对 `lab2` 有推送权限。可以复用 Lab 1 的专用同步密钥；GitHub 仓库级 secret 不会自动继承到新仓库。
+3. 将工作流和 `.github/codearts_known_hosts` 提交并合并到 GitHub 的 `master` 后触发同步。私钥仅放在 Actions secret，不放入仓库。
+4. 首次运行后检查 Actions 结果与两端 `master` 的 SHA；在此之前，不将同步标记为已完成。
+
+工作流读取最新 `master`、保留完整历史、校验已固定的 SSH 主机公钥，并在推送后比较 SHA。仅同步 `master`，不强制推送；若 CodeArts 出现独立提交导致推送失败，先核对差异再协调处理。
+
+## 协作顺序
+
+1. 确认题目未规定的业务规则，并记录在设计报告中。
+2. 完成子领域、限界上下文和术语，再讨论微服务与数据归属。
+3. 围绕三条关键流程迭代通信方案、时序图、接口及事件契约。
+4. 汇总整体架构图，交叉核对名称、状态、数据所有者和调用关系。
+5. 补齐实际分工，评审合并并将最终材料提交到 CodeArts 独立仓库。
+
+每张任务卡写清目标、交付文件、验收条件和负责人。每个 PR 说明修改范围、关联任务和仍未确定的问题。契约变更应同步更新相关图与报告。
+
+## 提交检查
+
+- [ ] README 已记录全部成员及实际分工。
+- [ ] 领域划分、类型与依据完整。
+- [ ] 限界上下文、术语、服务职责和拆分依据完整。
+- [ ] 核心逻辑数据模型包含 ID、关系、关键字段、状态、约束及数据归属。
+- [ ] 关键交互说明调用方、提供方、业务目的、交互方式、同步性、协议及理由。
+- [ ] 三条时序图均包含正常路径和主要异常分支。
+- [ ] 核心接口与事件定义、示例完整，且与数据模型和时序图一致。
+- [ ] 根目录 `architecture.png` 清晰、有图例，并已嵌入报告。
+- [ ] CodeArts 仓库链接已补齐，最终材料已同步。
+
+## 仓库组织说明
+
+本次用一个仓库集中保存报告、图源和契约。微服务边界通过职责、数据所有权和通信契约表达，不以 Git 仓库数量判断。若后续课程要求实现服务，再根据独立发布、权限和团队协作需要决定是否拆仓库。
