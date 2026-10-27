@@ -1,0 +1,65 @@
+erDiagram
+    direction TB
+    RideOrder["RideOrder / S-02"] {
+        string rideOrderId PK
+        string passengerId
+        string quoteId UK
+        string assignedDriverId "nullable"
+        string sourceOrderId "nullable"
+        string cityId
+        string state
+        int stateVersion
+        datetime matchDeadline
+    }
+    ActivePassengerRide["ActivePassengerRide / S-02"] {
+        string passengerId PK
+        string rideOrderId UK
+    }
+    DriverServiceState["DriverServiceState / S-02"] {
+        string driverId PK
+        boolean onlineIntent
+        string serviceCityId
+        string activeOrderId "nullable"
+        int availabilityVersion
+    }
+    Invitation["Invitation / S-02"] {
+        string invitationId PK
+        string rideOrderId
+        string driverId
+        string matchPlanId "ref S-03"
+        datetime expiresAt
+        string state
+    }
+    Trip["Trip / S-02"] {
+        string tripId PK
+        string rideOrderId UK
+        datetime boardingConfirmedAt
+        datetime startedAt
+        datetime endedAt "nullable"
+        int actualDistanceMeters "nullable"
+        int durationSeconds "nullable"
+        string state
+    }
+    Cancellation["Cancellation / S-02"] {
+        string cancellationId PK
+        string rideOrderId UK
+        string actorId
+        string actorRole
+        datetime cancelledAt
+        string cancellationRuleVersionId
+    }
+    MatchPlan["MatchPlan / S-03"] {
+        string matchPlanId PK
+        string rideOrderId "ref S-02"
+        int orderVersion
+        string strategyVersion
+        string candidateDriverIds
+    }
+    RideOrder ||--o| ActivePassengerRide : "active passenger slot"
+    RideOrder o|--o| DriverServiceState : "active assignment only"
+    RideOrder ||--o{ Invitation : "invites over time"
+    DriverServiceState ||--o{ Invitation : "addressed to"
+    RideOrder ||--o| Trip : "starts"
+    RideOrder ||--o| Cancellation : "cancels"
+    RideOrder ||..o{ MatchPlan : "ref: proposed plans"
+    MatchPlan o|..o{ Invitation : "ref: candidate source"

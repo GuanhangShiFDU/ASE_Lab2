@@ -1,8 +1,8 @@
 # 网约车平台微服务架构设计
 
-> 状态：#71199988 已完成领域分析与业务规则提案，待组内交叉评审；第 2～4 章和整体架构图仍是未完成模板。本文不将提案、设计推演或未执行检查记为组内共识或运行验证。
+> 状态：#71199988 领域分析与业务规则已合入基线；#71199989 服务边界与数据归属已形成设计提案及逻辑模型图，待交叉评审。第 3～4 章和整体架构图仍待后续任务完成。本文不将合并、提案或设计推演等同于已执行的业务测试或全部组员确认。
 
-依据：[Lab 2 作业要求](https://openmsg.yuque.com/openmsg/gp3cfs/eyuag71f933gx041)（核对日期：2026-10-26）。本次任务：[#71199988 Domain Analysis & Business Rules](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199988)，负责人：史冠航。
+依据：[Lab 2 作业要求](https://openmsg.yuque.com/openmsg/gp3cfs/eyuag71f933gx041)（核对日期：2026-10-26）。领域分析任务：[#71199988 Domain Analysis & Business Rules](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199988)，负责人：史冠航。
 
 ## 业务背景与规则提案
 
@@ -185,31 +185,167 @@
 
 ## 二、微服务划分与数据归属（30 分）
 
-### 2.1 限界上下文与基本术语
+本章对应 [#71199989 Service Boundaries & Data Ownership](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199989)。以下为基于 BR-01～BR-09 的设计提案。它确定后续流程共同使用的名字、状态与数据所有者；尚未实现服务，也不表示已完成跨成员评审或性能验证。
 
-| 上下文 | 对应子领域 | 业务范围 | 术语 | 本上下文中的定义 | 跨上下文的同名差异与关联 |
-| --- | --- | --- | --- | --- | --- |
-| 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 |
+### 2.1 限界上下文与统一语言
 
-按上下文逐项补充术语。不要默认子领域、上下文和微服务必须一一对应；说明实际映射关系。
+子域回答“解决什么业务问题”，上下文限定模型和术语的含义，服务则是独立部署与数据维护的边界。本方案保留九个上下文，合并身份和资料的部署单元，得到八个业务服务。D-02 的动态服务状态、D-04 的有效邀请与最终接单判定进入履约上下文，原因是它们参与同一个独占分配约束；不能机械地把九个子域转换成九个数据库。
 
-### 2.2 微服务职责与拆分依据
+| 上下文 | 子域映射 | 业务范围与术语定义 | 同名差异与关联 |
+| --- | --- | --- | --- |
+| C-01 身份访问 | D-01 | Account 表示登录主体；Role/CityScope 表示身份角色和运营查询范围；身份验证不等于某张订单的操作授权 | userId 是身份 ID，不是订单或司机分配 ID；订单所有权仍由履约检查 |
+| C-02 参与者资料 | D-02 的资料部分 | PassengerProfile、DriverProfile 表示业务资料；司机资料含车辆说明及所属账户，不持有当前订单 | “司机”是长期业务身份；在线意愿、服务城市、是否占用由 C-03 的 DriverServiceState 表达，资料中的展示副本不能用于派单决策 |
+| C-03 出行履约 | D-03；D-02 的动态服务资格；D-04 的有效邀请/接单约束 | RideOrder 是一次出行承诺；Trip 是实际运输事实；Invitation 是有明确对象和期限的接单资格；DriverServiceState 是在线意愿、当前服务城市和占用的权威记录 | “已接单”只指 RideOrder 已确认司机；候选入选、邀请送达或客户端点接受均不等于接单成功。履约“完成”不等于支付完成 |
+| C-04 匹配策略 | D-04 的候选搜索与排序 | MatchPlan 表示某次基于位置和资格快照得到的候选方案；候选分数与推荐顺序是可替换的策略结果 | “可用司机”是候选时刻的估计，提交接单仍须 C-03 重验；MatchPlan 不拥有有效邀请或订单状态 |
+| C-05 定价核算 | D-05 | FareRuleVersion、CancellationRuleVersion 是不可变规则版本；Quote 是限时估价；Bill 是可解释的应付费用；BillingJob 是尚未成功产出费用单的任务 | “报价”不是最终账单；“取消费”由已确认取消事实计算，不能据费用生成失败推翻取消；Bill 不把支付摘要当作渠道收款权威 |
+| C-06 位置空间 | D-06 | DriverLocation 是最新有效位置观测；新鲜度以最新有效点的服务端接收时间判断；区域检索返回位置与版本 | “在线”不能由 GPS 存在推断；“位置更新”不是到达/上车/结束的履约状态变化 |
+| C-07 支付收款 | D-07 | PaymentAttempt 是一次渠道付款尝试；Receipt 是确认收款记录；渠道交易号关联外部结果 | 支付渠道所称的“订单号”映射 paymentAttemptId，不是 rideOrderId；已付款由 Receipt 证明，不由前端返回页或费用单缓存证明 |
+| C-08 通知投递 | D-08 | NotificationDelivery 表示向某个有权接收者投递一个事实的尝试与结果 | “已送达”只说明投递，不改变订单/费用/支付状态；业务通知是事实副本 |
+| C-09 运营查询 | D-09 | OperationsRecord 是按订单串联的查询投影，QueryAudit 是查询留痕 | 运营页的“订单”“账单”是带来源版本的查询视图；无权直接写回履约、计价或收款数据 |
 
-| 服务名 | 所属子领域/上下文 | 业务职责及提供能力 | 主要依赖 | 划分依据 |
+服务名、上下文编号和下文实体名作为后续 #71199990、#71199991、#71199994、#71199995、#71199996 的共同基线。具体接口路径、事件名称、协议和重试参数由对应卡片补齐，发生调整时一起修改，不能声称已与尚未编写的契约核对完成。
+
+### 2.2 微服务职责、依赖及拆分依据
+
+| ID / 服务名 | 上下文 | 职责及对外能力 | 主要依赖（业务方向） | 拆分/合并理由 |
 | --- | --- | --- | --- | --- |
-| 待填写 | 待填写 | 待填写 | 待填写 | 待填写 |
+| S-01 `participant-service` | C-01、C-02 | 账户/角色、乘客和司机资料、身份关联、运营城市授权范围 | 可复用成熟身份组件；不依赖订单库 | 身份与资料变更频率和负载接近，小组先合并部署减少配置和运维负担；内部仍分模块，不复制身份验证方案到每个业务服务 |
+| S-02 `ride-service` | C-03 | 叫车、司机上下线/离线换城、有效邀请、接单、到达、上车开始、结束、取消、履约查询 | S-01 提供身份/资料；S-04 提供不可变报价及规则快照；S-05 提供新鲜位置证明；S-03 提议候选 | 把订单、行程、司机占用与有效邀请放在同一事务边界，直接维护一单一司机、一司机一单；避免拆成“接单服务”“取消服务”后无法共同裁决状态竞争 |
+| S-03 `dispatch-service` | C-04 | 搜索/排序候选，产生 MatchPlan，收到拒绝/过期/冲突后选择下一候选 | 读取 S-02 的订单/服务资格，查询 S-05 的空间候选；向 S-02 提议邀请 | 排序策略变化快、城市差异大，可单独发布与扩展；不承担最终确认，重启或重复执行不会获得第二份分配权 |
+| S-04 `pricing-service` | C-05 | 城市规则版本、预估报价、取消费、最终行程费用与费用查询 | 地图/路径能力用于预估；S-02 提供不可变取消或行程结束事实；S-06 提供收款查询结果 | 报价与结算共用计价版本和规则，合并避免漂移；城市/时段规则比履约状态机更常变化，独立发布；不承接渠道回调 |
+| S-05 `location-service` | C-06 | 司机位置上报、有效性/乱序判断、最新点与空间检索 | S-01 身份；S-02 提供服务城市和可访问订单关联 | 20,000 条/秒位置更新显著高于叫车流量，独立写入和空间索引扩展，避免每个 GPS 点锁订单；故障只降低候选/位置能力，不删除履约事实 |
+| S-06 `payment-service` | C-07 | 建立/恢复支付尝试、校验渠道回调、查证未知结果、唯一收款记录 | S-04 提供权威费用及付款人；外部支付渠道 | 外部渠道失败模式、安全凭据、对账运维和发布时间不同；收款处理独立于计价，支付不可用不阻止行程结束或旧取消单后重新叫车 |
+| S-07 `notification-service` | C-08 | 投递业务结果、失败重试、记录投递状态 | 其他服务的已提交事实和接收者授权信息；客户端/外部通知通道 | 客户端连接及重试流量可单独伸缩；通知故障不能拖住核心状态事务；通知不负责业务补偿 |
+| S-08 `operations-service` | C-09 | 按城市/订单关联只读业务记录、标注延迟、查询审计 | S-01 授权范围；S-02～S-06 业务事实/按需查询 | 跨过程查询与面向乘客的实时状态访问形态不同；独立投影减少运营检索对写路径的干扰，运维人员也不能跨库改业务数据 |
 
-结合题目流量、城市高峰差异、部署与运营、变化频率、团队组织等因素说明选择；写明哪些数据或能力需要独立扩展及原因。
+**部署与容量取舍。** 八个服务是设计边界，当前仍用一个仓库交付，不要求八个仓库或八位负责人。身份/资料合并，订单/行程/分配约束合并，报价/最终计费合并；位置、匹配和支付因负载、变化频率或故障隔离独立。独立部署增加配置、监控、跨服务故障排查和版本兼容成本，需共享追踪 ID、契约检查和告警约定，不能把拆得更多当成设计目标。
 
-### 2.3 核心逻辑数据模型与所有权
+- 叫车峰值 1,000 次/秒：S-02 的写入首先受独占约束和事务时延约束，S-03 可按城市扩展候选计算。避免把 S-04/S-05 的远程等待放进持锁事务；先取得版本化的不可变输入/时效证明，再在事务中检查其有效期和本地权威状态。
+- 定位峰值 20,000 条/秒：S-05 按 driverId、城市空间区域组织写入/索引；有效点仅在位置域更新，不按点更新 RideOrder 或生成全量运营投影。本卡不决定存储产品、分片数或压测结论。
+- 状态查询峰值 10,000 次/秒：S-02 可使用只读缓存/投影削峰，返回 `stateVersion`、来源和更新时间；写操作及“刚操作后的确认”回源权威状态。客户端带已见版本，缓存低于该版本时回源，不回退页面；缓存不可用可限流降级，不能伪造值。
+- 三城高峰不平均：部署层可隔离城市工作队列、限流和候选计算配额，保留热点城及多城同时高峰的容量预算。**本提案不按城市拆开 S-02 的乘客/司机独占记录**：它们以全局 passengerId/driverId 为键，先保持一个逻辑事务权威，以防换城后双重占用。若未来分库，必须另行设计全局资格迁移/保留机制，不能只加 cityId 就宣称约束仍成立。
+- 团队分工：李全昊维护本章及履约/数据口径，刘子扬维护通信/事件及取消竞争说明，刘乐翔维护客户端与接口，杨润东交叉检查，史冠航整合。负责人是文档协作关系，不意味着一人只能修改或运维一个服务。
 
-待补充 ER 图或类图并嵌入正文，图源按 [绘图约定](diagrams/README.md) 保存。
+### 2.3 逻辑数据模型与权威所有权
 
-| 实体/数据 | 业务 ID | 关系及关键字段 | 状态与业务约束 | 权威数据维护服务 | 引用或查询副本的使用方及更新方式 |
-| --- | --- | --- | --- | --- | --- |
-| 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 |
+#### 2.3.1 公共约定
 
-明确跨服务通过哪些 ID 关联，哪些是权威数据，哪些仅为引用或查询副本。涉及状态迁移时说明发起者、允许的原状态和冲突处理。本次无需完整物理表结构或建表 SQL。
+- 业务 ID 使用不带展示含义的全局唯一字符串，实体各有自己的 ID；账户通过 userId 关联乘客/司机资料。所有外部引用在业务入口校验存在性、角色和所有权，不以知道 ID 代替授权。
+- 金额为非负整数分、币种 CNY；时间为服务端 UTC 时刻，接口可序列化为 ISO 8601；距离为整数米，时长为整数秒。城市使用受支持 cityId，坐标须在后续契约中统一坐标系。
+- 状态变更带单调递增的 `stateVersion`，资料/位置等分别有 `profileVersion` / `locationVersion`。不同实体的版本不可互相比较；跨服务引用不是跨库外键，也不允许跨库联表写入。
+- 不可变快照保留来源 ID、规则版本、产生时间及必要字段；可刷新查询投影保留来源服务/实体 ID、来源版本和同步时间。快照用于解释当时决定，投影用于展示，不混用。
+- 图内列出关键字段，完整业务约束以下表和第 2.4 节为准；这些是逻辑模型，不是建表 SQL。图中实体后标记 `S-xx` 表示所有者；“ref”关系是跨服务 ID 引用，图上的关系线不表示数据库事务或网络调用。
+
+#### 2.3.2 履约与分配模型
+
+![履约与分配逻辑模型](diagrams/data-model-ride.png)
+
+[可编辑图源](diagrams/data-model-ride.mmd)。Trip 与 Cancellation 互斥：一次取消或未匹配成功的订单没有 Trip；只有成功上车开始才创建 Trip。图中的 0..1 是结构基数，状态约束另行限制组合。
+
+| 实体 / 权威服务 | ID、关键字段及关系 | 状态与约束 |
+| --- | --- | --- |
+| RideOrder / S-02 | rideOrderId；passengerId；cityId；quoteId；可空 assignedDriverId/sourceOrderId；起终点；fareRuleVersionId/cancellationRuleVersionId 及必要快照；createdAt/matchDeadline/acceptedAt/arrivedAt；state/stateVersion | `MATCHING → ASSIGNED → ARRIVED → IN_TRIP → COMPLETED`；也可按规则进入 `CANCELLED` / `MATCH_FAILED`。quoteId 最多绑定一个订单；sourceOrderId 必须是同乘客已取消/匹配失败的旧单；终态不可复活 |
+| ActivePassengerRide / S-02 | passengerId（唯一键）；rideOrderId（唯一引用）；创建时间 | 仅为四种未结束状态保留。建单、进入终态时同 RideOrder 原子建立/删除；跨城市也只有一条 |
+| DriverServiceState / S-02 | driverId（唯一键）；onlineIntent；serviceCityId；可空 activeOrderId；availabilityVersion；changedAt | 在线意愿不等于空闲；接单同时设置 activeOrderId，取消/完成仅在其仍等于该订单 ID 时清除。换城只允许离线且无占用；下线不会取消已有订单 |
+| Invitation / S-02 | invitationId；rideOrderId；driverId；可空 matchPlanId；createdAt/expiresAt；state | `PENDING → ACCEPTED/REJECTED/EXPIRED/REVOKED`，终态不可逆；同订单最多一个 PENDING。expiresAt = min(创建时刻+15 秒, matchDeadline)；接受成功必须与订单分配、司机占用同事务 |
+| Trip / S-02 | tripId；rideOrderId（唯一）；driverId；boardingConfirmedAt/startedAt/endedAt；actualDistanceMeters/durationSeconds；meteringSource/measurementVersion；state | `IN_PROGRESS → COMPLETED`。上车确认、Trip 建立和订单进入 IN_TRIP 同事务；结束与订单完成同事务。计费依据缺失不能填 0；可在结束后补齐经核对的依据并留版本，首次成功生成费用单后不得悄悄改变依据 |
+| Cancellation / S-02 | cancellationId；rideOrderId（唯一）；actorId/actorRole/reason；cancelledAt；acceptedAt 快照；cancellationRuleVersionId 及规则快照 | 只记录成功取消事实；存下可解释费用的时刻和版本，不存另一份可独立修改的订单状态；与订单 CANCELLED 及占用释放同事务 |
+| MatchPlan / S-03 | matchPlanId；rideOrderId；cityId；strategyVersion；基于的 orderVersion；候选 driverId 及来源位置/资格版本；createdAt；候选排序/提议结果 | 候选方案是有时效的工作记录；提议被接受不等于司机已接单。过时方案只能丢弃或重算，不能更新 RideOrder；即使重复提议，S-02 仍只创建一个有效邀请 |
+
+#### 2.3.3 定价与收款模型
+
+![定价与收款逻辑模型](diagrams/data-model-billing.png)
+
+[可编辑图源](diagrams/data-model-billing.mmd)。为可读性，图中 BillingJob 的来源只画订单关联，具体来源为 Trip 完成事实或 Cancellation；费用单与支付尝试是一对多，收款记录最多一个。
+
+| 实体 / 权威服务 | ID、关键字段及关系 | 状态与约束 |
+| --- | --- | --- |
+| FareRuleVersion / S-04 | fareRuleVersionId；cityId；适用时段；起步价、每米/每秒计价参数、最低费；roundingPolicy；生效范围 | 发布后的版本不可修改；新价格发布新版本。Quote 选定版本在该订单最终计费时保持不变 |
+| CancellationRuleVersion / S-04 | cancellationRuleVersionId；cityId；graceSeconds=120；feeMinor=500；适用取消者/阶段 | 叫车前展示、下单时由 S-02 保存快照；不随最新规则覆盖旧单；待接单/司机取消为 0，乘客接单满 120 秒且上车前为 500 分 |
+| Quote / S-04 | quoteId；passengerId；cityId；起终点；estimatedDistanceMeters/estimatedDurationSeconds/estimatedAmountMinor；currency；两个 ruleVersionId；createdAt/expiresAt | 生成后不可变；有效性由比较时间决定，不依赖清理任务准时运行。S-02 保存引用和必要快照，独立维护 quoteId 已绑定订单的唯一性 |
+| BillingJob / S-04 | billingJobId；rideOrderId；sourceType=`TRIP_COMPLETED` 或 `CANCELLED`；sourceId/sourceVersion；计价版本及事实快照；attemptCount/lastError/nextRetryAt | 按 `(sourceType, sourceId)` 唯一。`PENDING/RETRYING/READY/REQUIRES_REVIEW`；缺计费依据留待处理，不能生成猜测金额；依据补齐后按来源版本恢复同一任务 |
+| Bill / S-04 | billId；billVersion（固定版本）；billingJobId（唯一）；rideOrderId；passengerId；kind=`TRIP_FARE/CANCELLATION_FEE`；amountMinor/currency；规则、距离/时长或取消时间快照；明细；createdAt | 只在金额确定后产生，已生成金额不可变。0 分也可形成可解释费用记录，但标为无需支付，不创建支付尝试；大于 0 的支付结果来自 S-06，不把支付摘要当作本地业务事实 |
+| PaymentAttempt / S-06 | paymentAttemptId；billId；passengerId；权威费用快照及 billVersion；amountMinor/currency；channelRequestId；可空 channelTransactionId；status/statusVersion；requestedAt/lastCheckedAt | `CREATED → PROCESSING/UNKNOWN → SUCCEEDED/FAILED_FINAL`；CREATED/PROCESSING/UNKNOWN 都算未决；同 billId 最多一个未决尝试。FAILED_FINAL 仅表示渠道已确认且不可再成功的失败，不由网络超时产生 |
+| Receipt / S-06 | receiptId；billId（唯一）；paymentAttemptId（唯一）；channelTransactionId（渠道内唯一）；amountMinor/currency；paidAt；verifiedSource | 仅凭已验真的成功结果创建；与对应尝试 SUCCEEDED 同事务；重复回调/查询不得重复确认。确认成功不可被迟到失败覆盖 |
+
+Bill 查询的展示状态由明确事实组合得到：无 Bill 时为 `FEE_PENDING`；0 分为 `NO_PAYMENT_REQUIRED`；正金额且无 Receipt/未决尝试为 `UNPAID`；有未决尝试为 `PAYMENT_PENDING`；有有效 Receipt 为 `PAID`。S-06 不可用或投影未追上时显示支付状态未知/更新时间，不把它等同 UNPAID 并引导再次扣款。
+
+#### 2.3.4 参与者、位置与只读投影
+
+![参与者与查询副本逻辑模型](diagrams/data-model-support.png)
+
+[可编辑图源](diagrams/data-model-support.mmd)。只读副本保留业务 ID，不复制密码或渠道密钥；联系方式等仅向有业务权限的查询返回必要内容。
+
+| 实体 / 权威服务 | ID、关键字段及关系 | 状态/约束、引用方 |
+| --- | --- | --- |
+| Account / S-01 | userId；认证主体引用；roles；运营 allowedCityIds；accountVersion | 认证组件管理凭据，本业务模型不重复保存明文密码。角色和城市范围用于身份授权；订单内归属检查由 S-02 完成 |
+| PassengerProfile / S-01 | passengerId；userId（唯一）；displayName/contactReference；profileVersion | S-02、S-04、S-06 引用 passengerId；展示仅缓存必要资料，不以缓存允许越权操作 |
+| DriverProfile / S-01 | driverId；userId（唯一）；displayName/contactReference/vehicleSummary；profileVersion | S-02 的 DriverServiceState 通过 driverId 关联；资料不再定义 online、busy 或 activeOrderId |
+| DriverLocation / S-05 | driverId（唯一）；经纬度/坐标系；观测时间 observedAt；服务端 lastValidReceivedAt；sessionEpoch/sequence；locationVersion；serviceCityId 来源版本 | 只用有效新点更新当前位置与新鲜度；同会话递增 sequence、重连使用服务端发放的新 epoch，旧会话/旧序号不能覆盖。超过 15 秒陈旧；版本判定不能只用客户端时间 |
+| NotificationDelivery / S-07 | deliveryId；sourceFactId/sourceService/sourceVersion；recipientId（S-01 userId）；channel；payloadReference；attemptCount/lastError | `(sourceFactId, recipientId, channel)` 去重；PENDING/SENT/FAILED_RETRYABLE。投递重复不得变成重新执行原业务操作 |
+| OperationsRecord / S-08 | rideOrderId；cityId；passengerId/driverId；履约/费用/支付摘要；各来源 ID/version；sourceUpdatedAt/syncedAt | 只读的多来源投影，按每个来源分别判新旧，不伪造一个跨服务统一版本；可显示部分数据未同步并按需回源 |
+| QueryAudit / S-08 | queryAuditId；operatorUserId；allowedCityScopeSnapshot；查询条件摘要；queriedAt；结果范围 | 只追加必要查询留痕；查询先校验授权城市，不因知道订单 ID 绕过；无直接修改源服务数据的入口 |
+| OperationRecord / 各写操作所属服务 | `(actorId, operationType, idempotencyKey)`；requestFingerprint；targetId；resultReference；createdAt | 由处理操作的权威服务保存；同键同内容返回原结果，同键异内容冲突。持久化业务结果与业务状态同事务；短期缓存失效也不能使业务唯一约束失效，保留期由契约另定 |
+
+### 2.4 不变量、状态迁移与一致性边界
+
+#### 2.4.1 履约使用一个本地事务裁决
+
+S-02 私有的数据存储共同维护 RideOrder、ActivePassengerRide、DriverServiceState、Invitation、Trip、Cancellation 及自身 OperationRecord。模型层要求事务与唯一约束，具体数据库产品后续选择；不依靠前端禁用按钮、缓存锁或“先查询再单独写入”保证独占。
+
+| 操作 / 发起者 | 允许原状态与事务内检查 | 原子写入及失败结果 |
+| --- | --- | --- |
+| 首次叫车 / 乘客 | 先取 S-04 权威 Quote/规则；事务中验证用户/城市/起终点匹配、当前时间 `< expiresAt`、无活动订单；重叫时检查来源旧单归属及终态 | 建 RideOrder=MATCHING、ActivePassengerRide、OperationRecord；quoteId 唯一。并发重复或已有活动单明确冲突；原成功请求重放先返回原单，不重新判过期 |
+| 上下线或换城 / 司机 | 司机操作自身 DriverServiceState；换城要求原来离线且 activeOrderId 为空；允许城市取三城范围 | 同一司机记录串行推进 availabilityVersion；下线只改变意愿，保留占用。与接单竞争时用同一记录的事务顺序判定 |
+| 发邀请 / S-03 提议、S-02 执行 | MATCHING、未过 matchDeadline、当前无有效 PENDING；提议版本/司机城市和资格适用 | 将旧过期邀请终结后建立唯一 PENDING；到期判断看时刻而非只看状态标签。重复提议不得同时留两个邀请 |
+| 接受邀请 / 受邀司机 | 先取 S-05 的位置版本/接收时间证明；事务内按决策时刻检查位置证明的城市与服务城市一致、年龄 `≤15 秒`、邀请为该司机且未过期、MATCHING、未过总期限、在线/同城/无占用 | 将邀请 ACCEPTED、订单 ASSIGNED/assignedDriverId/acceptedAt、司机 activeOrderId 和 OperationRecord 一起提交。所有权检查失败或并发冲突不能局部成功 |
+| 拒绝/邀请到期 / 受邀司机或到期处理 | PENDING 且订单仍 MATCHING；总期限到达时不再换候选 | 关闭邀请；若尚可继续则请求新方案，若总期限到或确定无候选则将订单 MATCH_FAILED 并释放乘客占用。S-02 自己负责最终截止判断，不能依赖 S-03 一直在线 |
+| 到达 / 已分配司机 | ASSIGNED 且 driverId 与订单一致 | 更新 ARRIVED、arrivedAt、stateVersion；重复同操作返回原结果，不重复产生事实 |
+| 上车开始 / 已分配司机 | ARRIVED，订单及占用仍一致 | 建 Trip=IN_PROGRESS，保存 boardingConfirmedAt/startedAt，并将订单置 IN_TRIP；取消竞争只可能有一个提交成功 |
+| 取消 / 所属乘客或已分配司机 | 乘客可 MATCHING/ASSIGNED/ARRIVED；司机仅 ASSIGNED/ARRIVED；记录事务序列中的决定时刻与 acceptedAt | 建唯一 Cancellation、订单 CANCELLED，撤销 PENDING 邀请，删除该单乘客占用，并按 activeOrderId 条件释放司机。费用任务/通知随后恢复，不回滚已取消事实 |
+| 结束 / 已分配司机 | IN_TRIP，计时合法，订单/Trip/占用关系一致 | Trip 与订单 COMPLETED，保存已取得的计费依据或缺失状态、释放该单占用。通知计价恢复处理；费用失败不改变履约终态 |
+
+每个事务有固定锁顺序或等价的冲突检测及有限重试；对外只在提交成功后报告成功。以 S-02 串行裁决点的服务端时间检查期限/费用边界并持久化，不能拿客户端点击时间覆盖顺序。并发接单、取消、开始互相冲突时，失败方读取最新权威状态后返回明确原因；运输超时返回结果未知并按原幂等键恢复。
+
+**位置证明的时效限制。** S-02 在接单事务前请求 S-05 的有效点证明，并在事务内重验其年龄；证明过旧或位置服务不可用则不能新接单。证明不是跨服务全局锁，S-05 随后的新点可能更新位置，但不能改写已经确认的分配。司机城市、在线和占用在 S-02 本地最终校验，S-03 的资格副本永远不能直接确认接单。
+
+#### 2.4.2 跨服务边界不假设分布式原子提交
+
+- **报价到订单**：S-04 保存不可变 Quote，S-02 保存其 ID 和快照并独占绑定 quoteId。报价过期由 S-02 的首次建单决策检查；报价查询失败时不猜金额或创建新订单。已建单的响应丢失依靠 S-02 OperationRecord 恢复。
+- **取消/结束到费用**：S-02 的事务保存业务事实和待投递记录，异步传递的协议在 #71199990 决定。S-04 以 `(sourceType, sourceId)` 去重建立 BillingJob，成功时原子写唯一 Bill 并完成任务；计费依据未齐则等待/重试并公开 FEE_PENDING。即使投递重复或服务重启，也不再取消/结束一次。S-02 的待投递记录与源事实原子保存；消费者保存已处理标识与业务写入，失败可重放或按源事实对账补齐，不能仅“发消息后希望成功”。
+- **支付与费用**：发起新尝试前 S-06 读取 S-04 权威 Bill，核对乘客、正金额、币种及不可变版本；S-06 本地事务锁定 billId 的支付槽位，检查无 Receipt、无未决尝试后创建 PaymentAttempt。先持久化渠道请求 ID 再调用外部渠道，同一尝试所有发送/重试沿用该 ID。结果 UNKNOWN 时先查询原尝试，不能创建第二笔。
+- **收款确认**：S-06 验证渠道结果关联、金额、币种与真实性，再将尝试成功和 Receipt 一起提交。对外渠道需支持幂等请求/按原请求查询以及明确终态；只有可信的 FAILED_FINAL 才释放槽位供新尝试。若渠道不具备这些保证，改为等待人工核对，不能用本地幂等宣称外部扣款天然恰好一次。矛盾结果或额外成功流水记录为异常待核对，不改掉已有 Receipt 或伪报新的成功。
+- **无费用与失败展示**：0 分 Bill 不调用渠道；未生成费用、支付未知、通知失败分别显示，不伪装为费用 0、支付失败或行程未完成。S-04 的支付展示副本可延迟，真正再次付款资格始终由 S-06 权威判定。
+
+### 2.5 引用、副本更新与读取约定
+
+| 数据流 / 副本使用方 | 权威来源与引用方式 | 更新、延迟及冲突处理 |
+| --- | --- | --- |
+| 身份与资料 → 各业务服务 | S-01 的 userId/passengerId/driverId；必要 profileVersion | 身份授权按有效凭据及权限检查；资料展示可缓存，变更按版本刷新。运营城市权限必须在每次查询校验，权限检查失败不得使用旧展示缓存放行 |
+| Quote/规则 → S-02 | S-04 quoteId 和不可变规则版本；订单保留必要快照 | 创建时读取并校验，快照此后不随最新价格变化；后续计费按保留版本重现，而非读取最新费率 |
+| 订单/司机服务状态 → S-03 | S-02 rideOrderId/stateVersion、driverId/availabilityVersion | 通知或按需查询更新候选视图；过时方案可重算。最终邀请/接单都回到 S-02 验证，副本延迟最多影响效率，不能放宽唯一约束 |
+| 最新位置 → S-03 / 已授权乘客查询 | S-05 driverId/locationVersion/lastValidReceivedAt | 高频最新点读取与空间索引；旧序号不覆盖，超过 15 秒不可用于新匹配。乘客只可读自己当前订单关联司机的位置，无法用任意 driverId 枚举 |
+| 取消/完成事实 → S-04 | S-02 cancellationId/tripId、rideOrderId、源版本与必要计费快照 | 持久待投递、去重任务、失败重试/对账；延迟时 FEE_PENDING。源版本更新只补齐未产单任务，不默默重算已确定费用 |
+| 收款事实 → S-04 / S-08 | S-06 receiptId/paymentAttemptId/billId 及来源版本 | 更新只读摘要，成功不可被旧失败覆盖；显示时间和未知状态。支付资格检查回源 S-06，不依据运营/账单摘要 |
+| 已提交业务事实 → S-07 | 各所有者的事实 ID/来源版本及接收者 | 按事实+接收者+通道去重、失败重试；离线恢复先读业务权威当前状态再接增量；通知不能作为成功判据 |
+| 履约/费用/支付 → S-08 | 各服务的业务 ID 关联、分来源版本 | 各来源独立消费去重和版本比较；缺失显示未同步，可按权限回源。需要一致裁决的写操作不走该投影；查询可接受短暂不一致但必须显式标记 |
+
+以上“更新通知/业务事实”规定语义与一致性责任，不预设所有通信都必须经消息中间件。来源版本、事实 ID、去重和恢复责任必须在 #71199990 的方案中落实，不能省略。API 网关若采用仅做路由、认证协助、限流等，不拥有业务数据；数据库/缓存/消息设施也不额外计作业务微服务。
+
+### 2.6 后续流程核对与本卡检查记录
+
+| 后续任务 | 固定输入和必须保持的约束 | 当前状态 |
+| --- | --- | --- |
+| #71199990 通信与事件 | 八个服务名；S-02 唯一履约权威；版本、待投递、去重、失败查证；不得形成两个有效邀请所有者 | 待后续卡补充协议、事件和参数，并与刘子扬交叉确认 |
+| #71199991 报价/叫车/接单流程 | Quote → RideOrder；S-03 只提议、S-02 发有效邀请并确认；客户端拿到权威分配后才显示成功 | 待画具体接口/事件时序并与刘乐翔确认展示字段 |
+| #71199994 取消/重新叫车 | S-02 状态竞争与 Cancellation；S-04 BillingJob/Bill；新旧订单通过 sourceOrderId 关联，欠费不占用新单 | 待流程/契约逐项核对 |
+| #71199995 接驾/行程/支付 | 到达 → 上车与开始同一成功结果 → 完成；Bill 与 Receipt 分开；UNKNOWN 禁止新扣款 | 待流程/契约逐项核对 |
+| #71199996 核心接口 | ID、枚举、分/米/秒、来源版本、幂等作用域、未知与冲突；模型字段是基线，不是已发布 JSON 契约 | 待定义真实路径、示例、错误和认证字段 |
+| #71199997 / #71200000 评审与验收 | 逐项检查 R-01～R-08、BR-01～BR-09、边界与三个图；重点检查下面的竞争场景 | 文档静态检查可执行；业务运行测试不适用于本次纯设计任务 |
+
+本卡设计推演应满足：两单争同一司机仅一单成功；同一乘客跨城并发叫车仅一单成功；取消先于接单时不再接单；开始先于取消时拒绝普通取消；旧取消不释放新单司机占用；匹配服务停机仍由履约截止；报价刚过期的首次请求失败而已成功的重试返回原单；重复结束只生成一份费用；支付未知保持原尝试；乱序位置不刷新新鲜度。这些是**待评审的预期设计结果，不是已运行通过的测试**。
+
+交付包括本章、三张逻辑模型的 Mermaid 图源及 PNG。静态检查覆盖文档链接、图源能否导出、实体/服务引用和交接补丁应用；真实组内确认、后续时序图与接口逐项对照仍须在各卡完成时记录，不提前填写“已确认”。
 
 ## 三、服务通信设计（15 分）
 

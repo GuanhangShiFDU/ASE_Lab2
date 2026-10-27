@@ -1,0 +1,68 @@
+erDiagram
+    direction TB
+    Account["Account / S-01"] {
+        string userId PK
+        string roles
+        string allowedCityIds
+        int accountVersion
+    }
+    PassengerProfile["PassengerProfile / S-01"] {
+        string passengerId PK
+        string userId UK
+        int profileVersion
+    }
+    DriverProfile["DriverProfile / S-01"] {
+        string driverId PK
+        string userId UK
+        string vehicleSummary
+        int profileVersion
+    }
+    DriverServiceRef["DriverServiceState ref / S-02"] {
+        string driverId PK
+        string serviceCityId
+        int availabilityVersion
+    }
+    DriverLocation["DriverLocation / S-05"] {
+        string driverId PK
+        double latitude
+        double longitude
+        datetime lastValidReceivedAt
+        int sessionEpoch
+        int sequence
+        int locationVersion
+    }
+    RideOrderRef["RideOrder ref / S-02"] {
+        string rideOrderId PK
+        string passengerId
+        string assignedDriverId "nullable"
+        int stateVersion
+    }
+    OperationsRecord["OperationsRecord / S-08"] {
+        string rideOrderId PK
+        string cityId
+        string sourceIdsAndVersions
+        datetime syncedAt
+    }
+    QueryAudit["QueryAudit / S-08"] {
+        string queryAuditId PK
+        string operatorUserId "ref S-01"
+        string allowedCityScopeSnapshot
+        datetime queriedAt
+    }
+    NotificationDelivery["NotificationDelivery / S-07"] {
+        string deliveryId PK
+        string sourceFactId
+        int sourceVersion
+        string recipientId "ref S-01"
+        string channel
+        string status
+    }
+    Account ||--o| PassengerProfile : "passenger role"
+    Account ||--o| DriverProfile : "driver role"
+    PassengerProfile ||..o{ RideOrderRef : "ref: passenger history"
+    DriverProfile o|..o{ RideOrderRef : "ref: assigned history"
+    DriverProfile ||..o| DriverServiceRef : "ref: live service state"
+    DriverServiceRef ||..o| DriverLocation : "ref: latest valid location"
+    RideOrderRef ||..o| OperationsRecord : "ref: read projection"
+    Account ||..o{ QueryAudit : "ref: operator"
+    Account ||..o{ NotificationDelivery : "ref: recipient"
