@@ -1,0 +1,21 @@
+{
+  "eventId": "evt-demo-08",
+  "eventType": "ride.match-failed.v1",
+  "schemaVersion": "1.0.0",
+  "source": "ride-service",
+  "occurredAt": "2026-10-27T02:01:00Z",
+  "cityId": "shanghai",
+  "aggregateType": "RideOrder",
+  "aggregateId": "order-demo-failed",
+  "aggregateVersion": 1,
+  "correlationId": "corr-demo-01",
+  "causationId": "op-demo-08",
+  "data": {
+    "rideOrderId": "order-demo-failed",
+    "passengerId": "passenger-demo-04",
+    "stateVersion": 2,
+    "state": "MATCH_FAILED",
+    "reason": "DEADLINE_EXCEEDED",
+    "failedAt": "2026-10-27T02:01:00Z"
+  }
+}

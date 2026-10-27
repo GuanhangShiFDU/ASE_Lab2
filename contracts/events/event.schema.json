@@ -1,0 +1,1175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/GuanhangShiFDU/ASE_Lab2/contracts/events/event.schema.json",
+  "title": "Lab2 business event envelope v1",
+  "type": "object",
+  "properties": {
+    "eventId": {
+      "$ref": "#/$defs/id",
+      "description": "所有者生成的稳定事实消息 ID，重投不改变"
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "包含主版本的事件名"
+    },
+    "schemaVersion": {
+      "const": "1.0.0",
+      "description": "本次字段契约版本"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "发布服务；需同时通过 MQ 发布身份验证"
+    },
+    "occurredAt": {
+      "$ref": "#/$defs/utcTime",
+      "description": "本业务事实的提交/裁决时刻，不是重投时刻"
+    },
+    "cityId": {
+      "type": "string",
+      "enum": [
+        "shanghai",
+        "hangzhou",
+        "nanjing"
+      ],
+      "description": "业务归属城市"
+    },
+    "aggregateType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "本服务内的聚合类型"
+    },
+    "aggregateId": {
+      "$ref": "#/$defs/id",
+      "description": "聚合 ID"
+    },
+    "aggregateVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "本聚合 Outbox 事件流序号；不等于跨实体全局版本"
+    },
+    "correlationId": {
+      "$ref": "#/$defs/id",
+      "description": "贯穿业务请求的关联 ID"
+    },
+    "causationId": {
+      "$ref": "#/$defs/id",
+      "description": "导致此事实的操作 ID 或上游 eventId"
+    },
+    "data": {
+      "type": "object",
+      "description": "具体业务载荷"
+    }
+  },
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "source",
+    "occurredAt",
+    "cityId",
+    "aggregateType",
+    "aggregateId",
+    "aggregateVersion",
+    "correlationId",
+    "causationId",
+    "data"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "utcTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "measurement": {
+      "type": "object",
+      "properties": {
+        "actualDistanceMeters": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "已核验实际距离，米"
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "已核验实际时长，秒"
+        },
+        "measurementVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该 Trip 计费依据版本"
+        },
+        "meteringSource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "可追溯的计量来源标识"
+        }
+      },
+      "required": [
+        "actualDistanceMeters",
+        "durationSeconds",
+        "measurementVersion",
+        "meteringSource"
+      ],
+      "additionalProperties": true
+    },
+    "ride.order-created.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "quoteId": {
+          "$ref": "#/$defs/id",
+          "description": "已绑定报价 ID"
+        },
+        "sourceOrderId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id",
+              "description": "重新叫车关联的旧订单"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "重新叫车关联的旧订单；无此事实时为 null"
+        },
+        "state": {
+          "const": "MATCHING",
+          "description": "当前权威状态"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "订单建立时刻"
+        },
+        "matchDeadline": {
+          "$ref": "#/$defs/utcTime",
+          "description": "建立后 60 秒截止"
+        },
+        "fareRuleVersionId": {
+          "$ref": "#/$defs/id",
+          "description": "锁定的计价规则版本"
+        },
+        "cancellationRuleVersionId": {
+          "$ref": "#/$defs/id",
+          "description": "锁定的取消规则版本"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "quoteId",
+        "sourceOrderId",
+        "state",
+        "createdAt",
+        "matchDeadline",
+        "fareRuleVersionId",
+        "cancellationRuleVersionId"
+      ],
+      "additionalProperties": true
+    },
+    "ride.invitation-issued.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "invitationId": {
+          "$ref": "#/$defs/id",
+          "description": "邀请 ID"
+        },
+        "driverId": {
+          "$ref": "#/$defs/id",
+          "description": "唯一被邀请司机"
+        },
+        "matchPlanId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id",
+              "description": "候选方案 ID"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "候选方案 ID；无此事实时为 null"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "邀请创建时刻"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "单次 15 秒与总期限的较早时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "invitationId",
+        "driverId",
+        "matchPlanId",
+        "createdAt",
+        "expiresAt"
+      ],
+      "additionalProperties": true
+    },
+    "ride.invitation-closed.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "invitationId": {
+          "$ref": "#/$defs/id",
+          "description": "邀请 ID"
+        },
+        "driverId": {
+          "$ref": "#/$defs/id",
+          "description": "受邀司机"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACCEPTED",
+            "REJECTED",
+            "EXPIRED",
+            "REVOKED"
+          ],
+          "description": "邀请终态"
+        },
+        "closedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "终结时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "invitationId",
+        "driverId",
+        "status",
+        "closedAt"
+      ],
+      "additionalProperties": true
+    },
+    "ride.order-assigned.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "invitationId": {
+          "$ref": "#/$defs/id",
+          "description": "被接受邀请"
+        },
+        "driverId": {
+          "$ref": "#/$defs/id",
+          "description": "确认分配司机"
+        },
+        "state": {
+          "const": "ASSIGNED",
+          "description": "订单状态"
+        },
+        "acceptedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "取消费计算所用接单时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "invitationId",
+        "driverId",
+        "state",
+        "acceptedAt"
+      ],
+      "additionalProperties": true
+    },
+    "ride.order-arrived.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "driverId": {
+          "$ref": "#/$defs/id",
+          "description": "已分配司机"
+        },
+        "state": {
+          "const": "ARRIVED",
+          "description": "订单状态"
+        },
+        "arrivedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "权威到达时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "driverId",
+        "state",
+        "arrivedAt"
+      ],
+      "additionalProperties": true
+    },
+    "ride.trip-started.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "tripId": {
+          "$ref": "#/$defs/id",
+          "description": "新建行程 ID"
+        },
+        "driverId": {
+          "$ref": "#/$defs/id",
+          "description": "已分配司机"
+        },
+        "state": {
+          "const": "IN_TRIP",
+          "description": "订单状态"
+        },
+        "boardingConfirmedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "确认上车时刻"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "行程开始时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "tripId",
+        "driverId",
+        "state",
+        "boardingConfirmedAt",
+        "startedAt"
+      ],
+      "additionalProperties": true
+    },
+    "ride.order-cancelled.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "cancellationId": {
+          "$ref": "#/$defs/id",
+          "description": "取消事实 ID"
+        },
+        "driverId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id",
+              "description": "取消前已分配司机"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "取消前已分配司机；无此事实时为 null"
+        },
+        "state": {
+          "const": "CANCELLED",
+          "description": "订单状态"
+        },
+        "previousState": {
+          "type": "string",
+          "enum": [
+            "MATCHING",
+            "ASSIGNED",
+            "ARRIVED"
+          ],
+          "description": "取消前权威状态"
+        },
+        "actorId": {
+          "$ref": "#/$defs/id",
+          "description": "已验证的发起主体"
+        },
+        "actorRole": {
+          "type": "string",
+          "enum": [
+            "PASSENGER",
+            "DRIVER"
+          ],
+          "description": "取消者角色"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "取消原因代码或简述"
+        },
+        "acceptedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/utcTime",
+              "description": "接单时刻；未分配时 null"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "接单时刻；未分配时 null；无此事实时为 null"
+        },
+        "cancelledAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "权威取消裁决时刻"
+        },
+        "cancellationRuleVersionId": {
+          "$ref": "#/$defs/id",
+          "description": "下单保留的取消规则版本"
+        },
+        "ruleSnapshot": {
+          "type": "object",
+          "properties": {
+            "graceSeconds": {
+              "const": 120,
+              "description": "免费时间阈值"
+            },
+            "feeMinor": {
+              "const": 500,
+              "description": "乘客超时取消费，分"
+            },
+            "currency": {
+              "const": "CNY",
+              "description": "币种"
+            }
+          },
+          "required": [
+            "graceSeconds",
+            "feeMinor",
+            "currency"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "cancellationId",
+        "driverId",
+        "state",
+        "previousState",
+        "actorId",
+        "actorRole",
+        "reason",
+        "acceptedAt",
+        "cancelledAt",
+        "cancellationRuleVersionId",
+        "ruleSnapshot"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "previousState": {
+                "const": "MATCHING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "actorRole": {
+                "const": "PASSENGER"
+              },
+              "acceptedAt": {
+                "type": "null"
+              },
+              "driverId": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "acceptedAt": {
+                "$ref": "#/$defs/utcTime"
+              },
+              "driverId": {
+                "$ref": "#/$defs/id"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ride.match-failed.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "state": {
+          "const": "MATCH_FAILED",
+          "description": "订单状态"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "NO_CANDIDATE",
+            "DEADLINE_EXCEEDED"
+          ],
+          "description": "失败依据"
+        },
+        "failedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "权威失败时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "state",
+        "reason",
+        "failedAt"
+      ],
+      "additionalProperties": true
+    },
+    "ride.trip-completed.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "tripId": {
+          "$ref": "#/$defs/id",
+          "description": "已完成行程 ID"
+        },
+        "driverId": {
+          "$ref": "#/$defs/id",
+          "description": "执行司机"
+        },
+        "state": {
+          "const": "COMPLETED",
+          "description": "订单状态"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "开始时刻"
+        },
+        "endedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "结束时刻，不得早于开始"
+        },
+        "fareRuleVersionId": {
+          "$ref": "#/$defs/id",
+          "description": "报价绑定的计价规则版本"
+        },
+        "measurement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/measurement",
+              "description": "有效计费依据；缺失不得用零代替"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "有效计费依据；缺失不得用零代替；无此事实时为 null"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "tripId",
+        "driverId",
+        "state",
+        "startedAt",
+        "endedAt",
+        "fareRuleVersionId",
+        "measurement"
+      ],
+      "additionalProperties": true
+    },
+    "ride.trip-measurement-ready.v1": {
+      "type": "object",
+      "properties": {
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "权威订单 ID；必须等于 envelope.aggregateId"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "订单所属乘客 ID"
+        },
+        "stateVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "该订单的业务状态版本"
+        },
+        "tripId": {
+          "$ref": "#/$defs/id",
+          "description": "已结束行程 ID"
+        },
+        "state": {
+          "const": "COMPLETED",
+          "description": "履约终态不改变"
+        },
+        "fareRuleVersionId": {
+          "$ref": "#/$defs/id",
+          "description": "原计价版本"
+        },
+        "measurement": {
+          "$ref": "#/$defs/measurement",
+          "description": "核验后的计费依据"
+        },
+        "verifiedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "核验保存时刻"
+        }
+      },
+      "required": [
+        "rideOrderId",
+        "passengerId",
+        "stateVersion",
+        "tripId",
+        "state",
+        "fareRuleVersionId",
+        "measurement",
+        "verifiedAt"
+      ],
+      "additionalProperties": true
+    },
+    "pricing.bill-created.v1": {
+      "type": "object",
+      "properties": {
+        "billId": {
+          "$ref": "#/$defs/id",
+          "description": "费用单 ID；等于 aggregateId"
+        },
+        "billVersion": {
+          "const": 1,
+          "description": "本版费用单不可变，版本为 1"
+        },
+        "billingJobId": {
+          "$ref": "#/$defs/id",
+          "description": "唯一计费任务"
+        },
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "关联订单"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "付款乘客"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "TRIP_FARE",
+            "CANCELLATION_FEE"
+          ],
+          "description": "费用类型"
+        },
+        "sourceId": {
+          "$ref": "#/$defs/id",
+          "description": "tripId 或 cancellationId"
+        },
+        "amountMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "非负整数金额，分"
+        },
+        "currency": {
+          "const": "CNY",
+          "description": "币种"
+        },
+        "ruleVersionId": {
+          "$ref": "#/$defs/id",
+          "description": "本次计算使用的费用规则版本"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "费用单提交时刻"
+        }
+      },
+      "required": [
+        "billId",
+        "billVersion",
+        "billingJobId",
+        "rideOrderId",
+        "passengerId",
+        "kind",
+        "sourceId",
+        "amountMinor",
+        "currency",
+        "ruleVersionId",
+        "createdAt"
+      ],
+      "additionalProperties": true
+    },
+    "payment.attempt-updated.v1": {
+      "type": "object",
+      "properties": {
+        "paymentAttemptId": {
+          "$ref": "#/$defs/id",
+          "description": "尝试 ID；等于 aggregateId"
+        },
+        "billId": {
+          "$ref": "#/$defs/id",
+          "description": "费用单"
+        },
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "订单"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "付款乘客"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CREATED",
+            "PROCESSING",
+            "UNKNOWN",
+            "SUCCEEDED",
+            "FAILED_FINAL"
+          ],
+          "description": "尝试状态"
+        },
+        "statusVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "尝试状态版本"
+        },
+        "amountMinor": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "正整数金额，分"
+        },
+        "currency": {
+          "const": "CNY",
+          "description": "币种"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "权威更新时刻"
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "未知/终态失败原因代码，不含渠道敏感原文"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "未知/终态失败原因代码，不含渠道敏感原文；无此事实时为 null"
+        }
+      },
+      "required": [
+        "paymentAttemptId",
+        "billId",
+        "rideOrderId",
+        "passengerId",
+        "status",
+        "statusVersion",
+        "amountMinor",
+        "currency",
+        "updatedAt",
+        "reasonCode"
+      ],
+      "additionalProperties": true
+    },
+    "payment.receipt-confirmed.v1": {
+      "type": "object",
+      "properties": {
+        "receiptId": {
+          "$ref": "#/$defs/id",
+          "description": "收款 ID；等于 aggregateId"
+        },
+        "paymentAttemptId": {
+          "$ref": "#/$defs/id",
+          "description": "成功尝试"
+        },
+        "billId": {
+          "$ref": "#/$defs/id",
+          "description": "费用单"
+        },
+        "rideOrderId": {
+          "$ref": "#/$defs/id",
+          "description": "订单"
+        },
+        "passengerId": {
+          "$ref": "#/$defs/id",
+          "description": "付款人"
+        },
+        "amountMinor": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "确认实收正金额，分"
+        },
+        "currency": {
+          "const": "CNY",
+          "description": "币种"
+        },
+        "paidAt": {
+          "$ref": "#/$defs/utcTime",
+          "description": "经核验的渠道支付时刻"
+        }
+      },
+      "required": [
+        "receiptId",
+        "paymentAttemptId",
+        "billId",
+        "rideOrderId",
+        "passengerId",
+        "amountMinor",
+        "currency",
+        "paidAt"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.order-created.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.order-created.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.invitation-issued.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.invitation-issued.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.invitation-closed.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.invitation-closed.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.order-assigned.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.order-assigned.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.order-arrived.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.order-arrived.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.trip-started.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.trip-started.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.order-cancelled.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.order-cancelled.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.match-failed.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.match-failed.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.trip-completed.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.trip-completed.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "ride.trip-measurement-ready.v1"
+        },
+        "source": {
+          "const": "ride-service"
+        },
+        "aggregateType": {
+          "const": "RideOrder"
+        },
+        "data": {
+          "$ref": "#/$defs/ride.trip-measurement-ready.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "pricing.bill-created.v1"
+        },
+        "source": {
+          "const": "pricing-service"
+        },
+        "aggregateType": {
+          "const": "Bill"
+        },
+        "data": {
+          "$ref": "#/$defs/pricing.bill-created.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "payment.attempt-updated.v1"
+        },
+        "source": {
+          "const": "payment-service"
+        },
+        "aggregateType": {
+          "const": "PaymentAttempt"
+        },
+        "data": {
+          "$ref": "#/$defs/payment.attempt-updated.v1"
+        }
+      }
+    },
+    {
+      "properties": {
+        "eventType": {
+          "const": "payment.receipt-confirmed.v1"
+        },
+        "source": {
+          "const": "payment-service"
+        },
+        "aggregateType": {
+          "const": "Receipt"
+        },
+        "data": {
+          "$ref": "#/$defs/payment.receipt-confirmed.v1"
+        }
+      }
+    }
+  ]
+}

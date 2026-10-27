@@ -1,0 +1,23 @@
+{
+  "eventId": "evt-demo-13",
+  "eventType": "payment.receipt-confirmed.v1",
+  "schemaVersion": "1.0.0",
+  "source": "payment-service",
+  "occurredAt": "2026-10-27T02:16:10Z",
+  "cityId": "shanghai",
+  "aggregateType": "Receipt",
+  "aggregateId": "receipt-demo-01",
+  "aggregateVersion": 1,
+  "correlationId": "corr-demo-01",
+  "causationId": "op-demo-13",
+  "data": {
+    "receiptId": "receipt-demo-01",
+    "paymentAttemptId": "attempt-demo-01",
+    "billId": "bill-demo-01",
+    "rideOrderId": "order-demo-01",
+    "passengerId": "passenger-demo-01",
+    "amountMinor": 2500,
+    "currency": "CNY",
+    "paidAt": "2026-10-27T02:16:02Z"
+  }
+}

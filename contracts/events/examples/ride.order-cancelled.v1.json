@@ -1,0 +1,33 @@
+{
+  "eventId": "evt-demo-07",
+  "eventType": "ride.order-cancelled.v1",
+  "schemaVersion": "1.0.0",
+  "source": "ride-service",
+  "occurredAt": "2026-10-27T02:02:10Z",
+  "cityId": "shanghai",
+  "aggregateType": "RideOrder",
+  "aggregateId": "order-demo-cancel",
+  "aggregateVersion": 1,
+  "correlationId": "corr-demo-01",
+  "causationId": "op-demo-07",
+  "data": {
+    "rideOrderId": "order-demo-cancel",
+    "passengerId": "passenger-demo-03",
+    "stateVersion": 3,
+    "cancellationId": "cancel-demo-01",
+    "driverId": "driver-demo-03",
+    "state": "CANCELLED",
+    "previousState": "ASSIGNED",
+    "actorId": "user-demo-03",
+    "actorRole": "PASSENGER",
+    "reason": "PLANS_CHANGED",
+    "acceptedAt": "2026-10-27T02:00:10Z",
+    "cancelledAt": "2026-10-27T02:02:10Z",
+    "cancellationRuleVersionId": "cancel-sh-01",
+    "ruleSnapshot": {
+      "graceSeconds": 120,
+      "feeMinor": 500,
+      "currency": "CNY"
+    }
+  }
+}

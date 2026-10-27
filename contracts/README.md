@@ -1,15 +1,15 @@
 # 核心接口与业务事件
 
-当前仅有结构骨架，尚未确认微服务、业务接口、事件或技术选型。
+#71199990 已补充服务通信方案及 13 类事件草案，命名依据 #71199989 服务边界交接稿。HTTP 仍为空骨架，具体路径和三条时序图由后续卡补齐；当前不代表已经实现服务或完成组内评审。
 
 ## 文件组织
 
 | 路径 | 用途 | 当前状态 |
 | --- | --- | --- |
 | [http/openapi.yaml](http/openapi.yaml) | HTTP/REST 核心接口契约 | OpenAPI 3.1.0 空骨架，`paths: {}` |
-| [events/README.md](events/README.md) | 业务事件目录与定义模板 | 待补充真实事件、字段及消息示例 |
+| [events/README.md](events/README.md) | 业务事件目录、字段和消费语义 | 13 类 v1 事件，附 JSON Schema 与完整示例 |
 
-选用 gRPC 时再增加 `grpc/` 下的 `.proto`；选用 WebSocket 时再增加相应消息定义。本目录的 HTTP 骨架不代表全部交互已经确定采用 REST。
+本轮选择 HTTPS/JSON 请求、短轮询和 RabbitMQ 事实投递，不采用 gRPC/WebSocket，因此无需对应文件。HTTP 交互 C-01～C-18 见设计报告第 3 章；核心路径、方法、请求/响应、错误体和示例仍由 #71199996 填入 OpenAPI。事件的 JSON Schema 与示例在 `events/` 中，可与 HTTP 契约分开评审。
 
 ## 核心接口需要说明什么
 

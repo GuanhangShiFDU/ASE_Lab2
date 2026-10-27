@@ -1,0 +1,28 @@
+{
+  "eventId": "evt-demo-10",
+  "eventType": "ride.trip-measurement-ready.v1",
+  "schemaVersion": "1.0.0",
+  "source": "ride-service",
+  "occurredAt": "2026-10-27T02:15:35Z",
+  "cityId": "shanghai",
+  "aggregateType": "RideOrder",
+  "aggregateId": "order-demo-01",
+  "aggregateVersion": 7,
+  "correlationId": "corr-demo-01",
+  "causationId": "op-demo-10",
+  "data": {
+    "rideOrderId": "order-demo-01",
+    "passengerId": "passenger-demo-01",
+    "stateVersion": 5,
+    "tripId": "trip-demo-01",
+    "state": "COMPLETED",
+    "fareRuleVersionId": "fare-sh-01",
+    "measurement": {
+      "actualDistanceMeters": 8000,
+      "durationSeconds": 720,
+      "measurementVersion": 1,
+      "meteringSource": "verified-meter-demo"
+    },
+    "verifiedAt": "2026-10-27T02:15:35Z"
+  }
+}

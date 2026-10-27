@@ -1,0 +1,25 @@
+{
+  "eventId": "evt-demo-01",
+  "eventType": "ride.order-created.v1",
+  "schemaVersion": "1.0.0",
+  "source": "ride-service",
+  "occurredAt": "2026-10-27T02:00:00Z",
+  "cityId": "shanghai",
+  "aggregateType": "RideOrder",
+  "aggregateId": "order-demo-01",
+  "aggregateVersion": 1,
+  "correlationId": "corr-demo-01",
+  "causationId": "op-demo-01",
+  "data": {
+    "rideOrderId": "order-demo-01",
+    "passengerId": "passenger-demo-01",
+    "stateVersion": 1,
+    "quoteId": "quote-demo-01",
+    "sourceOrderId": null,
+    "state": "MATCHING",
+    "createdAt": "2026-10-27T02:00:00Z",
+    "matchDeadline": "2026-10-27T02:01:00Z",
+    "fareRuleVersionId": "fare-sh-01",
+    "cancellationRuleVersionId": "cancel-sh-01"
+  }
+}
