@@ -1,0 +1,64 @@
+erDiagram
+    direction TB
+    FareRuleVersion["FareRuleVersion / S-04"] {
+        string fareRuleVersionId PK
+        string cityId
+        string ratesAndRounding
+    }
+    CancellationRuleVersion["CancellationRuleVersion / S-04"] {
+        string cancellationRuleVersionId PK
+        int graceSeconds
+        int feeMinor
+    }
+    Quote["Quote / S-04"] {
+        string quoteId PK
+        string passengerId
+        string cityId
+        int estimatedAmountMinor
+        string fareRuleVersionId
+        string cancellationRuleVersionId
+        datetime expiresAt
+    }
+    RideOrderRef["RideOrder ref / S-02"] {
+        string rideOrderId PK
+        string quoteId UK
+    }
+    BillingJob["BillingJob / S-04"] {
+        string billingJobId PK
+        string rideOrderId "ref S-02"
+        string sourceType
+        string sourceId "unique with sourceType"
+        int sourceVersion
+        string status
+    }
+    Bill["Bill / S-04"] {
+        string billId PK
+        string billingJobId UK
+        string passengerId
+        string kind
+        int amountMinor
+        string currency
+    }
+    PaymentAttempt["PaymentAttempt / S-06"] {
+        string paymentAttemptId PK
+        string billId "ref S-04"
+        string channelRequestId UK
+        int amountMinor
+        string status
+        int statusVersion
+    }
+    Receipt["Receipt / S-06"] {
+        string receiptId PK
+        string billId UK
+        string paymentAttemptId UK
+        string channelTransactionId "unique per channel"
+        datetime paidAt
+    }
+    FareRuleVersion ||--o{ Quote : "prices"
+    CancellationRuleVersion ||--o{ Quote : "discloses"
+    Quote ||..o| RideOrderRef : "ref: bound once"
+    RideOrderRef ||..o| BillingJob : "ref: completed or cancelled"
+    BillingJob ||--o| Bill : "produces when ready"
+    Bill ||..o{ PaymentAttempt : "ref: attempts over time"
+    Bill ||..o| Receipt : "ref: at most one receipt"
+    PaymentAttempt ||--o| Receipt : "confirms"
