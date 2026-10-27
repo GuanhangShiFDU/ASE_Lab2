@@ -1,18 +1,19 @@
 # 设计图
 
-本目录用于保存可编辑图源和导出图。本卡已提供三张逻辑数据模型图；业务时序图和总体架构图由后续卡片完成。
+本目录用于保存可编辑图源和导出图。已提供三张逻辑数据模型图及 #71199991 叫车主流程/恢复图；取消、行程支付时序图和总体架构图待后续完成。
 
 | 图 | 建议图源名 | 说明 |
 | --- | --- | --- |
 | 履约与分配模型 | [data-model-ride.mmd](data-model-ride.mmd) / [PNG](data-model-ride.png) | S-02 履约权威与 S-03 候选方案 |
 | 定价与收款模型 | [data-model-billing.mmd](data-model-billing.mmd) / [PNG](data-model-billing.png) | S-04 费用与 S-06 收款边界 |
 | 参与者与查询副本 | [data-model-support.mmd](data-model-support.mmd) / [PNG](data-model-support.png) | 资料、位置、通知和运营只读模型 |
-| 报价、叫车与接单 | `quote-request-match.mmd` | 正常路径及主要异常分支 |
+| 报价、叫车与接单 | [源](quote-request-match.mmd) / [PNG](quote-request-match.png) / [SVG](quote-request-match.svg) | 正常路径及无候选、拒绝/过期、失效报价与接单冲突 |
+| 客户端恢复与位置/通知 | [源](booking-recovery.mmd) / [PNG](booking-recovery.png) / [SVG](booking-recovery.svg) | 叫车流程补充图，未知结果、刷新、位置权限和只读投影 |
 | 取消与重新叫车 | `cancel-rebook.mmd` | 包含取消与接单冲突 |
 | 接驾、上车与支付 | `pickup-trip-payment.mmd` | 包含支付失败及结果处理 |
 | 系统整体架构 | `architecture.mmd` | 汇总最终服务及主要交互，提供图例 |
 
-后三条时序图及整体架构的文件名是后续约定，文件尚未创建。可使用 Mermaid，也可根据表达需要使用 `.drawio` 或 `.puml` 等图源，并相应调整引用。
+取消、接驾支付及整体架构的文件名是后续约定，文件尚未创建。可使用 Mermaid，也可根据表达需要使用 `.drawio` 或 `.puml` 等图源，并相应调整引用。
 
 ## 导出与引用
 
@@ -39,3 +40,21 @@ done
 ```
 
 语法参考：[Mermaid ER 图](https://mermaid.js.org/syntax/entityRelationshipDiagram)；导出工具：[Mermaid CLI](https://github.com/mermaid-js/mermaid-cli)。
+
+## 叫车流程图导出
+
+#71199991 的两张图均已嵌入报告；方法定义见 [叫车契约](../../contracts/http/booking.md)，SVG 便于缩放阅读。图例：同步请求为实线实心箭头，响应为虚线实心箭头，异步事实为开放箭头；本地自调用为服务内截止任务。
+
+```bash
+for diagram in quote-request-match booking-recovery; do
+  for format in png svg; do
+    npx --yes @mermaid-js/mermaid-cli@11.12.0 \
+      -c docs/diagrams/booking-render.json \
+      -i "docs/diagrams/$diagram.mmd" \
+      -o "docs/diagrams/$diagram.$format" \
+      -t neutral -b white -w 2400 -s 2
+  done
+done
+```
+
+语法参考：[Mermaid 时序图](https://mermaid.js.org/syntax/sequenceDiagram.html)。这只是设计图渲染，不是业务运行测试。

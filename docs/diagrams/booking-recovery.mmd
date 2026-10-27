@@ -1,0 +1,53 @@
+sequenceDiagram
+    autonumber
+    actor C as 乘客/司机端
+    participant R as S-02 履约
+    participant L as S-05 位置
+    participant MQ as RabbitMQ
+    participant N as S-07 通知
+    participant X as 外部通知通道
+    participant O as S-08 运营
+    actor A as 运营端
+    Note over C,A: 实线请求、虚线响应、开放箭头异步事实；通知及运营投影不是履约权威
+    opt 叫车/接单响应丢失
+        C->>R: getOperationResult(operationId, operationType)
+        alt SUCCEEDED / REJECTED
+            R-->>C: 第一次已存结果（并非当前订单状态）
+        else PENDING / NOT_OBSERVED / 暂不可用
+            R-->>C: 仍未知；退避查询或原键原内容恢复
+            Note over C,R: 不换键重复叫车；不把当前无活动单当成请求失败
+        end
+    end
+    C->>R: getMyActiveRide()
+    R-->>C: 本人活动单或null
+    opt 有已知订单ID（包括已结束的订单）
+        C->>R: getRideOrder(rideOrderId, minStateVersion)
+        R-->>C: 当前权威状态、版本、serverTime
+    end
+    opt 在线司机恢复邀请入口
+        C->>R: listDriverInvitations()
+        R-->>C: 本人有效邀请及期限
+    end
+    Note over C,R: 然后约5秒加抖动、单个在途轮询；终态停止快速轮询<br/>旧通知只能触发重读，不能回退状态
+    opt 乘客查看当前已分配司机
+        C->>L: getOrderLocation(rideOrderId)
+        L->>R: authorizeOrderLocation(principal, rideOrderId)
+        R-->>L: 当前关联与权限 / 拒绝
+        L-->>C: 最新点+时间+FRESH/STALE/UNAVAILABLE，或授权错误
+        Note over C,L: 超过15秒标陈旧；位置故障不改变订单状态；不展示其他订单司机位置
+    end
+    R-)MQ: ride.order-assigned.v1（或其他已提交事实）
+    par 独立订阅队列：提示
+        MQ-)N: ride.order-assigned.v1
+        N->>X: deliverHint(deliveryId, eventId, rideOrderId)
+        X-->>N: 通道回执 / 未送达待重试
+        C->>N: listMyNotifications()
+        N-->>C: 本人提示及业务标识（外部提醒也仅作提示）
+        C->>R: getRideOrder(rideOrderId, minStateVersion)
+        R-->>C: 当前状态（可能已取消，不能用旧接单通知覆盖）
+    and 独立订阅队列：只读投影
+        MQ-)O: ride.order-assigned.v1
+        Note over O,A: Inbox去重，按来源实体版本更新<br/>状态与费用版本不互相比
+        A->>O: queryOperationsRecords(cityId, rideOrderId)
+        O-->>A: 授权城市记录、来源版本和同步时间 / 拒绝
+    end
