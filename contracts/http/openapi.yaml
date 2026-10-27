@@ -1,10 +1,1040 @@
 openapi: 3.1.0
 info:
   title: ASE Lab 2 Ride-hailing API
-  version: 0.0.0-draft
-  description: >-
-    网约车平台 HTTP 接口设计骨架。服务边界与核心接口尚未确定，
-    paths 为空；本文档不表示已提供任何可调用的业务接口。
-# 服务划分确定后补充路径、请求/响应、示例、错误码、权限及幂等约定。
-# 如需按服务拆分契约，可在本目录组织多个 OpenAPI 文件。
-paths: {}
+  version: 0.1.0-booking-draft
+  description: '#71199991 的报价/叫车/接单/恢复查询最小契约，非已部署服务。#71199996 补齐资料、司机状态/定位写入、取消、行程、费用、支付、通知及运营等接口并统一评审。'
+servers:
+  - url: https://api.example.invalid
+    description: 虚构地址，仅为设计示例
+security:
+  - bearerAuth: []
+tags:
+  - name: pricing-service
+  - name: ride-service
+  - name: location-service
+paths:
+  /v1/quotes:
+    post:
+      operationId: createQuote
+      tags:
+        - pricing-service
+      summary: 根据起终点生成限时报价
+      description: 仅乘客本人。服务端核验起点所属支持城市、起终点同城和输入坐标，使用地图适配器预估。成功创建不可变报价（120 秒）；不是费用单。重新请求可生成新报价，无扣款或建单效果。
+      responses:
+        '201':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+              example:
+                quoteId: quote-booking-01
+                cityId: shanghai
+                pickup:
+                  latitude: 31.2304
+                  longitude: 121.4737
+                  coordinateSystem: WGS84
+                destination:
+                  latitude: 31.219
+                  longitude: 121.445
+                  coordinateSystem: WGS84
+                estimatedAmountMinor: 2800
+                currency: CNY
+                estimatedDistanceMeters: 6200
+                estimatedDurationSeconds: 1100
+                fareRuleVersionId: fare-sh-20261027-v1
+                cancellationRule:
+                  cancellationRuleVersionId: cancel-v1
+                  graceSeconds: 120
+                  feeMinor: 500
+                  currency: CNY
+                createdAt: '2026-10-27T02:00:00Z'
+                expiresAt: '2026-10-27T02:02:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+            example:
+              cityId: shanghai
+              pickup:
+                latitude: 31.2304
+                longitude: 121.4737
+                coordinateSystem: WGS84
+              destination:
+                latitude: 31.219
+                longitude: 121.445
+                coordinateSystem: WGS84
+      x-error-codes:
+        - UNSUPPORTED_CITY
+        - CROSS_CITY_NOT_SUPPORTED
+        - INVALID_COORDINATE
+        - ROUTE_UNAVAILABLE
+  /v1/ride-orders:
+    post:
+      operationId: createRideOrder
+      tags:
+        - ride-service
+      summary: 确认报价并建立待匹配订单
+      description: >-
+        仅所属乘客。先恢复原幂等结果，再读 Quote；客户端不能改金额/起终点。首次决策 currentTime < expiresAt，独占 quoteId
+        和全局乘客活动槽位。sourceOrderId 非空时须是本人 CANCELLED/MATCH_FAILED 旧单。MATCHING、OperationRecord、截止任务和
+        Outbox 原子提交；201 只证明建单，不证明接单。原键重放仍返回首次 201 快照，随后 getRideOrder 读当前值。
+      responses:
+        '201':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideOrder'
+              example:
+                rideOrderId: order-booking-01
+                quoteId: quote-booking-01
+                sourceOrderId: null
+                cityId: shanghai
+                state: MATCHING
+                stateVersion: 1
+                assignedDriverId: null
+                createdAt: '2026-10-27T02:00:20Z'
+                matchDeadline: '2026-10-27T02:01:20Z'
+                acceptedAt: null
+                serverTime: '2026-10-27T02:00:20Z'
+                source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRideOrderRequest'
+            example:
+              quoteId: quote-booking-01
+              sourceOrderId: null
+      x-error-codes:
+        - QUOTE_EXPIRED
+        - QUOTE_ALREADY_USED
+        - ACTIVE_RIDE_EXISTS
+        - INVALID_SOURCE_ORDER
+        - IDEMPOTENCY_CONFLICT
+        - DEPENDENCY_UNAVAILABLE
+        - OPERATION_PENDING
+  /v1/ride-orders/{rideOrderId}:
+    get:
+      operationId: getRideOrder
+      tags:
+        - ride-service
+      summary: 读取当前履约状态
+      description: >-
+        仅所属乘客或已分配司机；受邀未接单司机通过本人邀请读取最小必要信息。鉴权后返回 S-02 当前权威状态（缓存不可低于
+        minStateVersion，恢复/刚操作后回源）。serverTime 表示本次读取时刻。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideOrder'
+              example:
+                rideOrderId: order-booking-01
+                quoteId: quote-booking-01
+                sourceOrderId: null
+                cityId: shanghai
+                state: ASSIGNED
+                stateVersion: 2
+                assignedDriverId: driver-booking-01
+                createdAt: '2026-10-27T02:00:20Z'
+                matchDeadline: '2026-10-27T02:01:20Z'
+                acceptedAt: '2026-10-27T02:00:28Z'
+                serverTime: '2026-10-27T02:00:28Z'
+                source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/RideOrderId'
+        - $ref: '#/components/parameters/MinStateVersion'
+      x-error-codes:
+        - NOT_FOUND
+        - STATE_NOT_FRESH
+        - DEPENDENCY_UNAVAILABLE
+  /v1/me/active-ride:
+    get:
+      operationId: getMyActiveRide
+      tags:
+        - ride-service
+      summary: 刷新后发现本人未结束订单
+      description: >-
+        乘客按 ActivePassengerRide，司机按 DriverServiceState.activeOrderId 回源。没有活动单返回
+        rideOrder=null；不代表之前的未知叫车一定失败，仍需查询原 operationId。终态订单用已保存 orderId 查详情。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRide'
+              example:
+                rideOrder:
+                  rideOrderId: order-booking-01
+                  quoteId: quote-booking-01
+                  sourceOrderId: null
+                  cityId: shanghai
+                  state: ASSIGNED
+                  stateVersion: 2
+                  assignedDriverId: driver-booking-01
+                  createdAt: '2026-10-27T02:00:20Z'
+                  matchDeadline: '2026-10-27T02:01:20Z'
+                  acceptedAt: '2026-10-27T02:00:28Z'
+                  serverTime: '2026-10-27T02:00:28Z'
+                  source: ride-service
+                serverTime: '2026-10-27T02:00:28Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      x-error-codes:
+        - DEPENDENCY_UNAVAILABLE
+  /v1/me/invitations:
+    get:
+      operationId: listDriverInvitations
+      tags:
+        - ride-service
+      summary: 查询给本司机的当前有效邀请
+      description: >-
+        仅司机本人。返回当前未过期且订单仍 MATCHING 的 PENDING 邀请；可包含来自不同订单的邀请，按 expiresAt 排序，不能据列表判断最终可接单。约 5
+        秒轮询加抖动，不延长期限。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationList'
+              example:
+                items:
+                  - invitationId: invite-booking-01
+                    rideOrderId: order-booking-01
+                    driverId: driver-booking-01
+                    cityId: shanghai
+                    state: PENDING
+                    createdAt: '2026-10-27T02:00:22Z'
+                    expiresAt: '2026-10-27T02:00:37Z'
+                    matchDeadline: '2026-10-27T02:01:20Z'
+                serverTime: '2026-10-27T02:00:24Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      x-error-codes:
+        - DEPENDENCY_UNAVAILABLE
+  /v1/invitations/{invitationId}/accept:
+    post:
+      operationId: acceptInvitation
+      tags:
+        - ride-service
+      summary: 接受一个有效邀请
+      description: >-
+        仅受邀司机。先恢复原键，事务外读 S-05 位置证明，事务内重验其年龄（超过 15 秒不可用）、城市/在线/占用、MATCHING/PENDING、currentTime <
+        expiresAt 和 matchDeadline。同事务写邀请 ACCEPTED、订单 ASSIGNED、司机占用、OperationRecord 及两类
+        Outbox；提交后成功。重复原键返回原结果，不重验后来的过期时间；之后读当前订单。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResult'
+              example:
+                operationId: op-accept-01
+                invitation:
+                  invitationId: invite-booking-01
+                  rideOrderId: order-booking-01
+                  driverId: driver-booking-01
+                  cityId: shanghai
+                  state: ACCEPTED
+                  createdAt: '2026-10-27T02:00:22Z'
+                  expiresAt: '2026-10-27T02:00:37Z'
+                  matchDeadline: '2026-10-27T02:01:20Z'
+                rideOrderId: order-booking-01
+                stateVersion: 2
+                decidedAt: '2026-10-27T02:00:28Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-error-codes:
+        - INVITATION_EXPIRED
+        - ORDER_STATE_CONFLICT
+        - DRIVER_UNAVAILABLE
+        - LOCATION_STALE
+        - IDEMPOTENCY_CONFLICT
+        - DEPENDENCY_UNAVAILABLE
+        - OPERATION_PENDING
+  /v1/invitations/{invitationId}/reject:
+    post:
+      operationId: rejectInvitation
+      tags:
+        - ride-service
+      summary: 拒绝邀请而不取消乘客订单
+      description: >-
+        仅受邀司机。原键恢复优先；首次必须仍 PENDING 且未到期限。邀请 REJECTED 与操作结果/Outbox 同事务提交，订单保持
+        MATCHING。已被接受/撤销/过期返回冲突，不回滚已分配订单。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResult'
+              example:
+                operationId: op-reject-01
+                invitation:
+                  invitationId: invite-booking-01
+                  rideOrderId: order-booking-01
+                  driverId: driver-booking-01
+                  cityId: shanghai
+                  state: REJECTED
+                  createdAt: '2026-10-27T02:00:22Z'
+                  expiresAt: '2026-10-27T02:00:37Z'
+                  matchDeadline: '2026-10-27T02:01:20Z'
+                rideOrderId: order-booking-01
+                stateVersion: 1
+                decidedAt: '2026-10-27T02:00:28Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      x-error-codes:
+        - INVITATION_EXPIRED
+        - ORDER_STATE_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - OPERATION_PENDING
+  /v1/me/operations/{operationId}:
+    get:
+      operationId: getOperationResult
+      tags:
+        - ride-service
+      summary: 恢复本人未知写请求的原结果
+      description: >-
+        使用原 Idempotency-Key 及 operationType，按认证主体查询 OperationRecord。SUCCEEDED/REJECTED 是已存结果；PENDING
+        或 NOT_OBSERVED 都不能证明失败。原请求可能在途，继续查询或使用相同键和相同内容恢复，不能立刻换键建单。result 是首次结果快照，读取当前状态应再调用
+        getRideOrder。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResult'
+              example:
+                operationId: op-order-01
+                operationType: createRideOrder
+                serverTime: '2026-10-27T02:00:25Z'
+                status: SUCCEEDED
+                result:
+                  rideOrderId: order-booking-01
+                  quoteId: quote-booking-01
+                  sourceOrderId: null
+                  cityId: shanghai
+                  state: MATCHING
+                  stateVersion: 1
+                  assignedDriverId: null
+                  createdAt: '2026-10-27T02:00:20Z'
+                  matchDeadline: '2026-10-27T02:01:20Z'
+                  acceptedAt: null
+                  serverTime: '2026-10-27T02:00:20Z'
+                  source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/OperationId'
+        - $ref: '#/components/parameters/OperationType'
+      x-error-codes:
+        - DEPENDENCY_UNAVAILABLE
+  /v1/ride-orders/{rideOrderId}/location:
+    get:
+      operationId: getOrderLocation
+      tags:
+        - location-service
+      summary: 读取本人当前订单关联司机的最新位置
+      description: >-
+        仅该订单乘客且仍 ASSIGNED/ARRIVED/IN_TRIP；S-05 向 S-02 验证关联（授权缓存最多 5 秒并按终态/分配变更失效，授权不明拒绝）。禁止接受任意
+        driverId。超过 15 秒未有有效点返回 STALE 和旧点/时刻；没有有效点返回 UNAVAILABLE 和 null。位置依赖故障报 503，不修改履约状态。
+      responses:
+        '200':
+          description: 权威结果；详见操作语义。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResult'
+              example:
+                rideOrderId: order-booking-01
+                driverId: driver-booking-01
+                locationVersion: 8
+                point:
+                  latitude: 31.2304
+                  longitude: 121.4737
+                  coordinateSystem: WGS84
+                freshness: FRESH
+                lastValidReceivedAt: '2026-10-27T02:00:27Z'
+                serverTime: '2026-10-27T02:00:29Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/RideOrderId'
+      x-error-codes:
+        - LOCATION_NOT_AUTHORIZED
+        - DEPENDENCY_UNAVAILABLE
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 由 S-01 身份能力验证，具体 token 格式未指定。各业务服务另校验角色/资源归属。
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+      description: 同一主体+operationId 方法名+此键唯一；本键也称 operationId。内容相同返回原结果，内容不同报冲突。
+    MinStateVersion:
+      name: minStateVersion
+      in: query
+      schema:
+        $ref: '#/components/schemas/Version'
+      description: 仅针对本 rideOrderId。低于已见版本必须回源或报不可用，不能返回较旧状态。
+    RideOrderId:
+      name: rideOrderId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    InvitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    OperationType:
+      name: operationType
+      in: query
+      required: true
+      schema:
+        type: string
+        enum:
+          - createRideOrder
+          - acceptInvitation
+          - rejectInvitation
+  responses:
+    Error400:
+      description: 请求未成功；不得伪造业务结果。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: INVALID_REQUEST
+            message: 输入不合法
+            requestId: req-example-01
+            outcome: REJECTED
+            retryable: false
+    Error401:
+      description: 请求未成功；不得伪造业务结果。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: UNAUTHENTICATED
+            message: 请重新登录
+            requestId: req-example-01
+            outcome: REJECTED
+            retryable: false
+    Error403:
+      description: 请求未成功；不得伪造业务结果。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: FORBIDDEN
+            message: 无权执行此操作
+            requestId: req-example-01
+            outcome: REJECTED
+            retryable: false
+    Error404:
+      description: 请求未成功；不得伪造业务结果。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: NOT_FOUND
+            message: 资源不存在或对当前主体不可见
+            requestId: req-example-01
+            outcome: REJECTED
+            retryable: false
+    Error409:
+      description: 请求未成功；不得伪造业务结果。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: QUOTE_EXPIRED
+            message: 报价已过期，请重新报价
+            requestId: req-example-01
+            outcome: REJECTED
+            retryable: false
+    Error429:
+      description: 请求未成功；不得伪造业务结果。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: RATE_LIMITED
+            message: 请求过于频繁
+            requestId: req-example-01
+            outcome: REJECTED
+            retryable: true
+      headers:
+        Retry-After:
+          description: 建议退避秒数；重试写操作必须沿用原键。
+          schema:
+            type: integer
+            minimum: 1
+    Error503:
+      description: 业务错误；具体 code 见 booking.md。写请求传输异常/提交未知不能推断未执行。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: OPERATION_PENDING
+            message: 尚不能确认操作结果，请用原键查询或恢复
+            requestId: req-example-01
+            outcome: UNKNOWN
+            retryable: true
+      headers:
+        Retry-After:
+          description: 建议退避秒数；重试写操作必须沿用原键。
+          schema:
+            type: integer
+            minimum: 1
+  schemas:
+    Id:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$
+    UtcTime:
+      type: string
+      format: date-time
+      pattern: Z$
+    Version:
+      type: integer
+      minimum: 1
+      maximum: 9007199254740991
+    CityId:
+      type: string
+      enum:
+        - shanghai
+        - hangzhou
+        - nanjing
+    Point:
+      type: object
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        coordinateSystem:
+          const: WGS84
+          type: string
+      required:
+        - latitude
+        - longitude
+        - coordinateSystem
+      additionalProperties: false
+    QuoteRequest:
+      type: object
+      properties:
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        pickup:
+          $ref: '#/components/schemas/Point'
+        destination:
+          $ref: '#/components/schemas/Point'
+      required:
+        - cityId
+        - pickup
+        - destination
+      additionalProperties: false
+    CancellationRule:
+      type: object
+      properties:
+        cancellationRuleVersionId:
+          $ref: '#/components/schemas/Id'
+        graceSeconds:
+          const: 120
+          type: integer
+        feeMinor:
+          const: 500
+          type: integer
+        currency:
+          const: CNY
+          type: string
+      required:
+        - cancellationRuleVersionId
+        - graceSeconds
+        - feeMinor
+        - currency
+    Quote:
+      type: object
+      properties:
+        quoteId:
+          $ref: '#/components/schemas/Id'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        pickup:
+          $ref: '#/components/schemas/Point'
+        destination:
+          $ref: '#/components/schemas/Point'
+        estimatedAmountMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        currency:
+          const: CNY
+          type: string
+        estimatedDistanceMeters:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        estimatedDurationSeconds:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        fareRuleVersionId:
+          $ref: '#/components/schemas/Id'
+        cancellationRule:
+          $ref: '#/components/schemas/CancellationRule'
+        createdAt:
+          $ref: '#/components/schemas/UtcTime'
+        expiresAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - quoteId
+        - cityId
+        - pickup
+        - destination
+        - estimatedAmountMinor
+        - currency
+        - estimatedDistanceMeters
+        - estimatedDurationSeconds
+        - fareRuleVersionId
+        - cancellationRule
+        - createdAt
+        - expiresAt
+    CreateRideOrderRequest:
+      type: object
+      properties:
+        quoteId:
+          $ref: '#/components/schemas/Id'
+        sourceOrderId:
+          anyOf:
+            - $ref: '#/components/schemas/Id'
+            - type: 'null'
+      required:
+        - quoteId
+        - sourceOrderId
+      additionalProperties: false
+    RideOrder:
+      type: object
+      properties:
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        quoteId:
+          $ref: '#/components/schemas/Id'
+        sourceOrderId:
+          anyOf:
+            - $ref: '#/components/schemas/Id'
+            - type: 'null'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        state:
+          type: string
+          enum:
+            - MATCHING
+            - ASSIGNED
+            - ARRIVED
+            - IN_TRIP
+            - COMPLETED
+            - CANCELLED
+            - MATCH_FAILED
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+        assignedDriverId:
+          anyOf:
+            - $ref: '#/components/schemas/Id'
+            - type: 'null'
+        createdAt:
+          $ref: '#/components/schemas/UtcTime'
+        matchDeadline:
+          $ref: '#/components/schemas/UtcTime'
+        acceptedAt:
+          anyOf:
+            - $ref: '#/components/schemas/UtcTime'
+            - type: 'null'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+        source:
+          type: string
+          const: ride-service
+      required:
+        - rideOrderId
+        - quoteId
+        - sourceOrderId
+        - cityId
+        - state
+        - stateVersion
+        - assignedDriverId
+        - createdAt
+        - matchDeadline
+        - acceptedAt
+        - serverTime
+        - source
+    Invitation:
+      type: object
+      properties:
+        invitationId:
+          $ref: '#/components/schemas/Id'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        driverId:
+          $ref: '#/components/schemas/Id'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        state:
+          type: string
+          enum:
+            - PENDING
+            - ACCEPTED
+            - REJECTED
+            - EXPIRED
+            - REVOKED
+        createdAt:
+          $ref: '#/components/schemas/UtcTime'
+        expiresAt:
+          $ref: '#/components/schemas/UtcTime'
+        matchDeadline:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - invitationId
+        - rideOrderId
+        - driverId
+        - cityId
+        - state
+        - createdAt
+        - expiresAt
+        - matchDeadline
+    InvitationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invitation'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - items
+        - serverTime
+    ActiveRide:
+      type: object
+      properties:
+        rideOrder:
+          anyOf:
+            - $ref: '#/components/schemas/RideOrder'
+            - type: 'null'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - rideOrder
+        - serverTime
+    DecisionResult:
+      type: object
+      properties:
+        operationId:
+          $ref: '#/components/schemas/Id'
+        invitation:
+          $ref: '#/components/schemas/Invitation'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+        decidedAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - operationId
+        - invitation
+        - rideOrderId
+        - stateVersion
+        - decidedAt
+    LocationResult:
+      type: object
+      properties:
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        driverId:
+          $ref: '#/components/schemas/Id'
+        locationVersion:
+          anyOf:
+            - $ref: '#/components/schemas/Version'
+            - type: 'null'
+        point:
+          anyOf:
+            - $ref: '#/components/schemas/Point'
+            - type: 'null'
+        freshness:
+          type: string
+          enum:
+            - FRESH
+            - STALE
+            - UNAVAILABLE
+        lastValidReceivedAt:
+          anyOf:
+            - $ref: '#/components/schemas/UtcTime'
+            - type: 'null'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - rideOrderId
+        - driverId
+        - locationVersion
+        - point
+        - freshness
+        - lastValidReceivedAt
+        - serverTime
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requestId:
+          $ref: '#/components/schemas/Id'
+        outcome:
+          type: string
+          enum:
+            - REJECTED
+            - UNKNOWN
+        retryable:
+          type: boolean
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+        - code
+        - message
+        - requestId
+        - outcome
+        - retryable
+    OperationResult:
+      oneOf:
+        - type: object
+          properties:
+            operationId:
+              $ref: '#/components/schemas/Id'
+            operationType:
+              type: string
+              enum:
+                - createRideOrder
+                - acceptInvitation
+                - rejectInvitation
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            status:
+              type: string
+              enum:
+                - SUCCEEDED
+            result:
+              oneOf:
+                - $ref: '#/components/schemas/RideOrder'
+                - $ref: '#/components/schemas/DecisionResult'
+          required:
+            - operationId
+            - operationType
+            - serverTime
+            - status
+            - result
+        - type: object
+          properties:
+            operationId:
+              $ref: '#/components/schemas/Id'
+            operationType:
+              type: string
+              enum:
+                - createRideOrder
+                - acceptInvitation
+                - rejectInvitation
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            status:
+              type: string
+              enum:
+                - REJECTED
+            error:
+              $ref: '#/components/schemas/Error'
+          required:
+            - operationId
+            - operationType
+            - serverTime
+            - status
+            - error
+        - type: object
+          properties:
+            operationId:
+              $ref: '#/components/schemas/Id'
+            operationType:
+              type: string
+              enum:
+                - createRideOrder
+                - acceptInvitation
+                - rejectInvitation
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            status:
+              type: string
+              enum:
+                - PENDING
+                - NOT_OBSERVED
+          required:
+            - operationId
+            - operationType
+            - serverTime
+            - status

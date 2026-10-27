@@ -1,0 +1,83 @@
+sequenceDiagram
+    autonumber
+    actor P as 乘客端
+    participant Q as S-04 定价
+    participant M as 外部地图适配器
+    participant R as S-02 履约
+    participant MQ as RabbitMQ
+    participant D as S-03 匹配
+    participant L as S-05 位置
+    actor V as 司机端
+    Note over P,V: 实线实心箭头：同步请求；虚线实心：响应；开放箭头：异步事实；业务成功仅在权威事务提交后
+    P->>Q: createQuote(cityId, pickup, destination)
+    Q->>M: estimateRoute(pickup, destination)
+    M-->>Q: distanceMeters, durationSeconds
+    Q-->>P: Quote（预估价、规则版本、120秒期限）
+    Note over P,Q: 地图/同城校验失败则明确错误，不生成虚假报价
+    P->>R: createRideOrder(quoteId, operationId)
+    Note over R,D: 先查原键；同键成功直接返回原结果<br/>下方为首次执行路径；未知结果见恢复图
+    R->>Q: getQuoteSnapshot(quoteId, passenger)
+    Q-->>R: 不可变报价与所属乘客
+    break 首次报价到期、已有活动单或引用不合法
+        R-->>P: QUOTE_EXPIRED / ACTIVE_RIDE_EXISTS 等
+    end
+    Note over R,D: 本地事务：MATCHING、乘客唯一槽位<br/>操作结果、60秒截止任务、Outbox
+    R-->>P: 201 MATCHING（建单成功，尚未接单）
+    R-)MQ: ride.order-created.v1
+    MQ-)D: ride.order-created.v1
+    D->>R: getMatchingOrder(rideOrderId)
+    R-->>D: 起终点、当前状态/版本、matchDeadline
+    D->>L: findCandidateLocations(cityId, pickup)
+    L-->>D: 有效位置候选（故障不等于空列表）
+    D->>R: getDriverEligibility(driverIds)
+    R-->>D: 同城、在线、未占用快照
+    alt 成功搜索但无可用候选
+        D->>R: finishMatchingNoCandidates(expectedAggregateVersion)
+        Note over R,D: 重验版本、MATCHING、无PENDING；提交终态并释放乘客槽位
+        R-->>D: MATCH_FAILED（或冲突后重读）
+        R-)MQ: ride.match-failed.v1（仅成功终结后）
+    else 仍有候选且未到总期限
+        loop 拒绝/过期后，重读仍MATCHING才尝试下一候选
+            D->>R: proposeInvitation(driverId, proposalId, expectedAggregateVersion)
+            R-->>D: Invitation / 资格或版本冲突
+            opt 成功创建唯一PENDING邀请
+                R-)MQ: ride.invitation-issued.v1
+                Note over MQ,V: S-07 可异步提示；司机始终向S-02查询；提示迟到不延长期限
+                V->>R: listDriverInvitations()
+                R-->>V: 本人有效邀请、expiresAt、serverTime
+                alt 司机拒绝
+                    V->>R: rejectInvitation(invitationId, operationId)
+                    R-->>V: REJECTED（订单仍MATCHING）或冲突
+                    R-)MQ: ride.invitation-closed.v1（仅成功关闭后）
+                else 未响应且到达邀请期限
+                    R->>R: expireInvitation(invitationId)
+                    R-)MQ: ride.invitation-closed.v1（EXPIRED）
+                else 司机接受
+                    V->>R: acceptInvitation(invitationId, operationId)
+                    R->>L: getFreshLocationProof(driverId, cityId)
+                    L-->>R: 最新有效点证明 / 暂不可用
+                    Note over R,V: 原键恢复优先；首次裁决重验时间/位置年龄/同城在线/独占<br/>邀请ACCEPTED、订单ASSIGNED、司机占用、操作结果和Outbox同事务
+                    alt 首次裁决成功
+                        R-->>V: ACCEPTED + rideOrderId + stateVersion
+                        R-)MQ: ride.invitation-closed.v1（ACCEPTED）
+                        R-)MQ: ride.order-assigned.v1
+                    else 过期、被取消、司机占用或位置不合格
+                        R-->>V: INVITATION_EXPIRED / ORDER_STATE_CONFLICT 等
+                    end
+                end
+                opt 确有关闭事实投递（接受失败未必产生）
+                    MQ-)D: ride.invitation-closed.v1
+                    D->>R: getMatchingOrder(rideOrderId)
+                    R-->>D: 已ASSIGNED/终态则停止；仍MATCHING才续选
+                end
+            end
+        end
+    end
+    opt 总期限到达且仍MATCHING
+        R->>R: expireMatchingDeadline(rideOrderId)
+        R-)MQ: ride.match-failed.v1
+        Note over R,D: 撤销尚存PENDING邀请时也写ride.invitation-closed.v1
+    end
+    P->>R: getRideOrder(rideOrderId, minStateVersion)
+    R-->>P: 权威当前状态和版本
+    Note over P,R: ASSIGNED才展示已接单；MATCH_FAILED展示无结果与重叫入口<br/>取消竞争、超时恢复与位置显示见正文及恢复图
