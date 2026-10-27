@@ -1,0 +1,22 @@
+{
+  "eventId": "evt-demo-03",
+  "eventType": "ride.invitation-closed.v1",
+  "schemaVersion": "1.0.0",
+  "source": "ride-service",
+  "occurredAt": "2026-10-27T02:00:07Z",
+  "cityId": "shanghai",
+  "aggregateType": "RideOrder",
+  "aggregateId": "order-demo-reject",
+  "aggregateVersion": 1,
+  "correlationId": "corr-demo-01",
+  "causationId": "op-demo-03",
+  "data": {
+    "rideOrderId": "order-demo-reject",
+    "passengerId": "passenger-demo-02",
+    "stateVersion": 1,
+    "invitationId": "invite-demo-reject",
+    "driverId": "driver-demo-02",
+    "status": "REJECTED",
+    "closedAt": "2026-10-27T02:00:07Z"
+  }
+}
