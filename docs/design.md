@@ -340,7 +340,7 @@ S-02 私有的数据存储共同维护 RideOrder、ActivePassengerRide、DriverS
 | #71199991 报价/叫车/接单流程 | Quote → RideOrder；S-03 只提议、S-02 发有效邀请并确认；客户端拿到权威分配后才显示成功 | 待画具体接口/事件时序并与刘乐翔确认展示字段 |
 | #71199994 取消/重新叫车 | S-02 状态竞争与 Cancellation；S-04 BillingJob/Bill；新旧订单通过 sourceOrderId 关联，欠费不占用新单 | 待流程/契约逐项核对 |
 | #71199995 接驾/行程/支付 | 到达 → 上车与开始同一成功结果 → 完成；Bill 与 Receipt 分开；UNKNOWN 禁止新扣款 | 待流程/契约逐项核对 |
-| #71199996 核心接口 | ID、枚举、分/米/秒、来源版本、幂等作用域、未知与冲突；模型字段是基线，不是已发布 JSON 契约 | 待定义真实路径、示例、错误和认证字段 |
+| #71199996 核心接口 | ID、枚举、分/米/秒、来源版本、幂等作用域、未知与冲突；模型字段是基线，不是已发布 JSON 契约 | 设计路径、示例、错误和认证约定现见第 4.4 节；尚无服务实现 |
 | #71199997 / #71200000 评审与验收 | 逐项检查 R-01～R-08、BR-01～BR-09、边界与三个图；重点检查下面的竞争场景 | 文档静态检查可执行；业务运行测试不适用于本次纯设计任务 |
 
 本卡设计推演应满足：两单争同一司机仅一单成功；同一乘客跨城并发叫车仅一单成功；取消先于接单时不再接单；开始先于取消时拒绝普通取消；旧取消不释放新单司机占用；匹配服务停机仍由履约截止；报价刚过期的首次请求失败而已成功的重试返回原单；重复结束只生成一份费用；支付未知保持原尝试；乱序位置不刷新新鲜度。这些是**待评审的预期设计结果，不是已运行通过的测试**。
@@ -355,7 +355,7 @@ S-02 私有的数据存储共同维护 RideOrder、ActivePassengerRide、DriverS
 
 采用 **HTTPS/JSON 请求 + RabbitMQ 业务事件**。客户端短轮询恢复当前状态，本轮不采用 WebSocket 或 gRPC，因而不需要 `.proto` 或 WebSocket 消息文件。API 网关只承担路由、认证协助、限流和追踪，不拥有业务状态。S-01～S-08 的名词在下表完整列出，便于第 2 章尚未合并时并行阅读。
 
-表中“同步”表示当前业务步骤必须等待该结果；HTTP 返回“已受理”不等于后续业务完成，队列投递确认也不等于消费者完成。C 编号是交互标识，不是已经实现的 API 路径；最终路径由 #71199996 补入 OpenAPI。
+表中“同步”表示当前业务步骤必须等待该结果；HTTP 返回“已受理”不等于后续业务完成，队列投递确认也不等于消费者完成。C 编号是交互标识，不是已经实现的 API 路径；设计路径已由 #71199996 补入 OpenAPI，外部适配器端口另列输入输出边界。
 
 | ID | 调用方/发布方 → 提供方/订阅方 | 业务目的、数据与流向 | 请求/消息及业务同步性 | 协议/机制及选择理由 |
 | --- | --- | --- | --- | --- |
@@ -386,7 +386,7 @@ S-02 私有的数据存储共同维护 RideOrder、ActivePassengerRide、DriverS
 
 - 网关入口生成/透传关联 ID，服务间传递 correlationId、剩余 deadline；日志可关联幂等键摘要与业务 ID，不打印凭据、原始联系方式和支付密钥。
 - 写操作沿用 `(actorId, operationType, idempotencyKey)` 及请求指纹；同键同内容返回原结果，异内容报冲突。OperationRecord 与状态和 Outbox 同事务提交。草案约定在线重放窗口不少于 7 天；窗口外仍由 quoteId、唯一活动单、cancellationId、tripId、billId/Receipt 等业务约束防重，不允许简单删键就让旧支付再次执行。
-- 返回“成功”必须已提交权威业务结果。超时、断连、5xx 均可能发生在已提交之后，客户端先以原键重试或按已有 ID/操作查询恢复；未知结果不能直接换键再叫车/再扣款。HTTP 409 用于状态/幂等冲突；401/403 用于身份/权限，422 用于业务校验，429 携带重试提示，503 表示当前不可用且须查证操作结果。具体错误体和路径交 #71199996 统一。
+- 返回“成功”必须已提交权威业务结果。超时、断连、5xx 均可能发生在已提交之后，客户端先以原键重试或按已有 ID/操作查询恢复；未知结果不能直接换键再叫车/再扣款。HTTP 409 用于状态/幂等冲突；401/403 用于身份/权限，400 用于输入格式/范围校验，业务状态冲突统一 409（不另用 422），429 携带重试提示，503 表示当前不可用且须查证操作结果。具体错误体、路径与逐操作示例见 #71199996 的契约总览。
 - **设计预算而非测量结论**：普通读调用内部总预算 1 秒、客户端 3 秒；普通写请求客户端预算 5 秒，内部调用共享剩余预算；支付渠道提交/查询单次上限拟 3 秒，未确认仍保留同一尝试。幂等读在预算内最多重试 1 次；写只允许显式原键恢复，不由网关无条件重放。重试加随机抖动并受城市配额/熔断限制，不层层叠加。
 - 所有外部等待放在数据库持锁事务之外；取得不可变报价/位置证明后，在 S-02 裁决点检查当前时间、版本和本地资格。总匹配 60 秒、邀请最多 15 秒由 S-02 持久截止任务控制；不能依赖消息 TTL 或客户端轮询计时来执行终态迁移。
 - 资料展示可有带版本缓存；权限校验和业务资格不能因展示缓存命中而省略。GET 返回 sourceVersion/更新时间，客户端已见 stateVersion 作为最低版本请求，落后缓存回源或明确不可用，禁止回退状态。
@@ -430,7 +430,7 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 | #71199991 报价/叫车/接单 | C-02～C-07；ride.order-created.v1、ride.invitation-issued.v1、ride.invitation-closed.v1、ride.order-assigned.v1、ride.match-failed.v1 | 画实际时序及无人接单/过期/重复/未知分支，邀请送达不等于确认 |
 | #71199994 取消/重叫 | C-08/C-11；ride.order-cancelled.v1、pricing.bill-created.v1；新旧单 sourceOrderId | 取消与接单/上车竞争，以及免费/收费/费用待生成/通知失败；旧债不转移 |
 | #71199995 接驾/行程/支付 | ride.order-arrived.v1、ride.trip-started.v1、ride.trip-completed.v1、ride.trip-measurement-ready.v1、payment.attempt-updated.v1、payment.receipt-confirmed.v1 | 上车开始同一成功结果；计费依据补齐；失败与 UNKNOWN 区别；最终收款验证 |
-| #71199996 Core API Contracts | C-01～C-18、字段单位、角色/资源权限、原键重试和最低已见版本；事件路径/名称以本契约为准 | OpenAPI paths 仍为空；需补路径、方法、请求/响应和错误示例，不能说已与不存在的 API/时序图全部一致 |
+| #71199996 Core API Contracts | C-01～C-18、字段单位、角色/资源权限、原键重试和最低已见版本；事件路径/名称以本契约为准 | 已补路径、方法、请求/响应和错误示例；见第 4.4 节，静态核对已记录、人工评审待完成 |
 | #71199997 / #71200000 QA | 重复 eventId、未知扣款、乱序事实、超过截止时间、权限回源失败、断线恢复和跨城占用 | 转为设计评审条目；记录真实人员、版本、缺陷及复核结论，不预填运行通过 |
 
 本卡实际检查与交接范围见 [通信卡检查记录](../contracts/events/CHECKS.md)。总体架构图由 #71199999 将本章的请求箭头、事实发布/订阅关系和外部依赖汇总；事件示例均是虚构输入，不能作为线上日志或已执行业务证据。
@@ -445,15 +445,15 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 
 | 使用方 / 入口 | 输入与输出 | 等待、失败与恢复 | 所有者 / 相关方法 |
 | --- | --- | --- | --- |
-| 乘客/司机：个人资料 | 本人资料字段、已见 profileVersion → 保存后的本人资料 | 加载中不显示虚假资料；冲突重读，失败保留未提交输入；身份不来自表单里的用户 ID | S-01；getMyProfile / updateMyProfile，HTTP 细化交 #71199996 |
+| 乘客/司机：个人资料 | 本人资料字段、已见 profileVersion → 保存后的本人资料 | 加载中不显示虚假资料；冲突重读，失败保留未提交输入；身份不来自表单里的用户 ID | S-01；getMyProfile / updateMyProfile，HTTP 细化见第 4.4 节 |
 | 司机：上线、下线、服务城市 | onlineIntent、serviceCityId、已见 availabilityVersion → 权威在线意愿/占用/城市 | 在线不等于空闲；切城须离线且无活动单；下线不取消已分配订单；失败回读，不本地切换成成功 | S-02；getDriverServiceState / setDriverAvailability |
 | 乘客：起终点与报价 | 同城起终点、cityId → 预估价、有效期、计价版本、取消规则 | 报价中禁用确认；地图/城市失败明确提示；改起终点使旧报价 UI 失效；过期重新报价，不能把估价当应付金额 | S-04；createQuote |
 | 乘客：确认叫车与等待 | quoteId、sourceOrderId 或 null、operationId → orderId/MATCHING | 禁止重复点击只是一层体验保护；服务端原键幂等和乘客唯一槽位才保证不重复。提交未知显示“确认中”，不显示失败或自动重叫 | S-02；createRideOrder / getOperationResult / getRideOrder |
 | 司机：邀请列表与接受/拒绝 | 本人有效邀请、期限 → 本次决定或冲突 | 请求中禁用两个决定按钮；到期 UI 停止接受但最终以服务端时间为准；拒绝只结束该邀请；收到邀请/点接受均不是接单成功 | S-02；listDriverInvitations / acceptInvitation / rejectInvitation |
 | 乘客：已接单与车辆位置 | 当前订单 → 权威司机分配；订单授权的位置查询 → 最新点、更新时间/新鲜度 | ASSIGNED 后才显示已接单；位置超过 15 秒标陈旧，故障显示暂不可用；不因定位失败回退订单状态，不公开其他司机位置 | S-02 getRideOrder；S-05 getOrderLocation |
-| 司机：位置上报 | 建会话 → 服务端 epoch；epoch、递增 sequence、观测时刻与点 → 接收版本/拒绝 | 拟每 3 秒上报，单连接复用；断线后不把缓存旧点批量当实时点补发；旧 epoch/sequence 不覆盖、不刷新新鲜度 | S-05；openLocationSession / reportDriverLocation，HTTP 细化交 #71199996 |
+| 司机：位置上报 | 建会话 → 服务端 epoch；epoch、递增 sequence、观测时刻与点 → 接收版本/拒绝 | 拟每 3 秒上报，单连接复用；断线后不把缓存旧点批量当实时点补发；旧 epoch/sequence 不覆盖、不刷新新鲜度 | S-05；openLocationSession / reportDriverLocation，HTTP 细化见第 4.4 节 |
 | 乘客/司机：通知入口、刷新与重连 | 本人通知标识/活动单 → 当前订单及费用状态 | 提示不是权威；旧“接单成功”提示也要重读。刷新先恢复未知操作和本人活动单，再按订单 ID 查询；终态停止快速轮询 | S-07 listMyNotifications；S-02 getMyActiveRide / getRideOrder |
-| 运营：按城市查业务记录 | 授权城市、订单 ID/筛选与分页 → 订单、邀请、取消、账费/支付关联摘要 | 加载/无记录/无权限/投影延迟分别表达；展示来源版本、同步时间；身份授权失败不使用旧缓存放行；记录查询审计，无直接改写按钮 | S-08；queryOperationsRecords，跨流程字段交 #71199996 |
+| 运营：按城市查业务记录 | 授权城市、订单 ID/筛选与分页 → 订单、邀请、取消、账费/支付关联摘要 | 加载/无记录/无权限/投影延迟分别表达；展示来源版本、同步时间；身份授权失败不使用旧缓存放行；记录查询审计，无直接改写按钮 | S-08；queryOperationsRecords，跨流程字段见第 4.4 节 |
 | 后续流程入口 | 取消/重新叫车、到达/上车开始、结束/账单/支付 | 只提供与权威状态匹配的入口；费用待生成、支付未知分别表达；完整交互由 4.2/4.3 展开 | #71199994、#71199995；本卡不预填这些流程已经完成 |
 
 辅助方法的输入输出已在表中给出，核心 9 个客户端调用定义在 [OpenAPI](../contracts/http/openapi.yaml)。服务间方法、错误恢复和示例见 [叫车契约](../contracts/http/booking.md)。WGS84 是本卡新增的坐标统一提案，地图适配器显式转换供应商坐标；需与后续定位接口一起交叉确认。
@@ -514,14 +514,14 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 | 图中步骤 | 定义位置 | 业务对象与对应关系 | 核对范围 |
 | --- | --- | --- | --- |
 | createQuote → estimateRoute；createRideOrder → getQuoteSnapshot | [OpenAPI](../contracts/http/openapi.yaml)；[服务间方法](../contracts/http/booking.md) | Quote、规则版本 → RideOrder/MATCHING；C-02、C-03 | 名称/期限/成功语义已静态对照 |
-| getMatchingOrder / findCandidateLocations / getDriverEligibility / proposeInvitation / finishMatchingNoCandidates | [服务间方法](../contracts/http/booking.md) | MatchPlan 只提议，Invitation 和司机资格由 S-02 维护；C-04～C-06 | 图中文字与方法目录逐项对应，内部 HTTP 路径留 #71199996 |
+| getMatchingOrder / findCandidateLocations / getDriverEligibility / proposeInvitation / finishMatchingNoCandidates | [服务间方法](../contracts/http/booking.md) | MatchPlan 只提议，Invitation 和司机资格由 S-02 维护；C-04～C-06 | 图中文字与方法目录逐项对应，内部 HTTP 路径见 internal.yaml |
 | listDriverInvitations / acceptInvitation / rejectInvitation；getFreshLocationProof | [OpenAPI](../contracts/http/openapi.yaml)；[方法目录](../contracts/http/booking.md) | PENDING → ACCEPTED/REJECTED，订单仅接受成功进入 ASSIGNED；C-06、C-07 | 角色、原键、当前资格及独占边界已对照 |
 | expireInvitation / expireMatchingDeadline | [本地截止方法](../contracts/http/booking.md) | 邀请 EXPIRED、订单 MATCH_FAILED；由 S-02 持久任务维护 | 不依赖客户端或 MQ TTL |
 | 五类 ride 事实及 deliverHint | [事件定义/示例](../contracts/events/README.md)；[方法目录](../contracts/http/booking.md) | order-created、invitation-issued、invitation-closed、order-assigned、match-failed；C-15、C-16 | 全名、权威发布者和订阅者沿用 #71199990 |
 | getMyActiveRide / getOperationResult / getRideOrder / getOrderLocation / authorizeOrderLocation | [OpenAPI](../contracts/http/openapi.yaml)；[方法目录](../contracts/http/booking.md) | OperationRecord、ActivePassengerRide、RideOrder、DriverLocation；C-07、C-08、C-10、C-18 | 空活动单与未知结果分离；位置权限独立检查 |
-| queryOperationsRecords | [辅助方法](../contracts/http/booking.md) | OperationsRecord/QueryAudit；C-17 | 只读、按城市授权、显示延迟；完整结构交 #71199996 |
+| queryOperationsRecords | [辅助方法](../contracts/http/booking.md) | OperationsRecord/QueryAudit；C-17 | 只读、按城市授权、显示延迟；完整结构见 OpenAPI 的 OperationsPage |
 
-本次实际检查见 [#71199991 检查记录](checks/booking-71199991.md)。李全昊需复核裁决事务/位置证明及数据归属；刘子扬需复核事件/截止/未知结果；刘乐翔确认客户端反馈及 OpenAPI；杨润东把异常表转入设计评审。真实人员确认尚未发生，不能写“已确认”。#71199994/95 续写 4.2/4.3，#71199996 汇总剩余接口，#71199999 最后更新总体架构与全局状态。
+本次实际检查见 [#71199991 检查记录](checks/booking-71199991.md)。李全昊需复核裁决事务/位置证明及数据归属；刘子扬需复核事件/截止/未知结果；刘乐翔确认客户端反馈及 OpenAPI；杨润东把异常表转入设计评审。真实人员确认尚未发生，不能写“已确认”。#71199994/95 已补 4.2/4.3，#71199996 的接口汇总见 4.4，#71199999 接着更新总体架构与全局状态。
 
 
 ### 4.2 取消与重新叫车
@@ -664,25 +664,29 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 | 付款/查证 C-12/C-13 | createPaymentAttempt、getPaymentAttempt、getBillPaymentState、getBillSnapshot、submitCharge、queryCharge、handlePaymentCallback、applyVerifiedPaymentFact | OpenAPI / trip-payment.md；PaymentAttempt、Receipt；外部支付适配器 |
 | 付款结果/提示 C-14/C-15/C-16 | payment.attempt-updated.v1、payment.receipt-confirmed.v1、deliverHint | 事件目录及既有通知方法；S-04/S-07/S-08 的独立队列只更新各自副本或任务 |
 
-新增 8 个核心操作；前两条流程原 12 个操作保留，并扩展公共操作恢复的所属服务/结果类型。完整方法、权限、输入输出及错误码见 [接驾行程支付契约](../contracts/http/trip-payment.md)，可校验的虚构链见 [示例](../contracts/http/examples/trip-payment/README.md)。具体渠道回调路径/验签配置及其余辅助 HTTP 绑定由 #71199996 汇总，当前逻辑处理规则已给出。
+新增 8 个核心操作；前两条流程原 12 个操作保留，并扩展公共操作恢复的所属服务/结果类型。完整方法、权限、输入输出及错误码见 [接驾行程支付契约](../contracts/http/trip-payment.md)，可校验的虚构链见 [示例](../contracts/http/examples/trip-payment/README.md)。辅助 HTTP 与内部绑定已由 #71199996 汇总；外部渠道端口、验签边界见第 4.4 节，实际供应商路径/算法须在未来选型时确认。
 
 检查与人工推演场景见 [#71199995 记录](checks/trip-payment-71199995.md)。刘子扬复核事件与一致性，刘乐翔复核客户端反馈/接口，杨润东检查场景覆盖；均待真实评审后记录，不预填通过。
 
 ### 4.4 核心接口与事件
 
-- [契约编写约定](../contracts/README.md)。
-- [HTTP 接口契约](../contracts/http/openapi.yaml)：#71199991/94 的 12 个操作加上 #71199995 的 8 个接驾、行程、费用和支付操作，共 20 个核心操作；其余辅助接口/内部绑定由 #71199996 汇总。
-- [叫车方法与恢复语义](../contracts/http/booking.md)：包含核心调用、内部方法、错误码及事件对照。
-- [取消与重新叫车契约](../contracts/http/cancellation.md)：取消资格、版本/费用同意上限、计价和通知重试、新旧单关联与内部方法。
-- [接驾行程与支付契约](../contracts/http/trip-payment.md)：计量/费用恢复、支付幂等、超时查证、回调与最终收款。
-- [业务事件契约](../contracts/events/README.md)：#71199990 已定义 13 类事实及 Schema/示例，待随三条时序图逐项交叉核对。
-- 若选择 gRPC，补充 `.proto`；若选择 WebSocket，补充消息类型、方向和字段；未选择的协议无需创建文件。
+#71199996 将前三条流程汇总为 20 个核心 + 8 个辅助客户端操作，以及 16 个内部 HTTPS 操作。名称、归属和请求/响应保留三条流程的语义，没有实现业务服务器或付款渠道。原第 3 章的 422 提案统一为既有 400（输入）/409（业务冲突），避免同一错误出现两套状态码。
 
-| 流程步骤/时序图箭头 | 接口方法或事件名 | 契约文件及定义位置 | 涉及实体/状态 | 核对结果 |
-| --- | --- | --- | --- | --- |
-| 4.1 报价/叫车/接单及恢复图 | 9 个 OpenAPI operationId、内部方法、5 类 ride 事件 | `contracts/http/openapi.yaml`、`contracts/http/booking.md`、`contracts/events/README.md`；详见 4.1.5 | Quote、RideOrder、Invitation、OperationRecord、DriverLocation | 已静态对照；人工评审待完成 |
-| 4.2 取消/重叫及竞争恢复图 | 3 个新增 operationId、既有叫车调用、费用回源/补漏方法与 4 类事件 | `contracts/http/cancellation.md`、OpenAPI、事件目录；详见 4.2.5 | Cancellation、BillingJob、Bill、OperationRecord、新旧 RideOrder | 已静态对照；人工评审待完成 |
-| 4.3 接驾/行程/支付及恢复图 | 8 个新增 operationId、内部计量/渠道方法和 7 类事件 | `contracts/http/trip-payment.md`、OpenAPI、事件目录；详见 4.3.4 | Trip、BillingJob、Bill、PaymentAttempt、Receipt | 已静态对照；人工评审待完成 |
+| 入口 | 覆盖与约定 |
+| --- | --- |
+| [接口总览](../contracts/http/core-api.md) | 提供方/调用方、用途、完整方法目录、版本、认证授权、幂等、错误和适配器 IO；其余必要接口概要也在此 |
+| [公网 OpenAPI](../contracts/http/openapi.yaml) | 28 个操作；params/body/response/schema、成功/逐接口错误示例；资料、司机状态、位置会话/上报、通知及运营入口补齐 |
+| [内部 OpenAPI](../contracts/http/internal.yaml) | 16 个操作；服务专用身份、scope、城市边界及可信用户委托；复用公共 Schema，内部接口不对公网开放 |
+| [错误映射](../contracts/http/error-codes.yaml) | code→HTTP 唯一映射；同键成功重放不是错误，UNKNOWN 不伪装失败 |
+| [事件目录](../contracts/events/README.md) | 13 类事实、来源/订阅者、字段、Schema 和示例；eventId 去重，aggregateVersion 与 stateVersion 分开 |
+
+三条流程的详细业务语义分别见 [叫车](../contracts/http/booking.md)、[取消重叫](../contracts/http/cancellation.md)、[接驾行程支付](../contracts/http/trip-payment.md)。core-api.md 第 5 节列出六张主图/恢复图及调用、事件、ID/状态映射；检查器读取真实图源核对请求方法和事件名，再由既有示例链检查 ID、计价、版本、状态及恢复关系。
+
+新增辅助写入 updateMyProfile、setDriverAvailability、openLocationSession 同样使用原键恢复，getOperationResult 按 operationType 路由所有者；其成功结果与方法类型绑定。位置报告按 epoch/sequence 去重，旧会话/重复/过时点不刷新新鲜度。运营每次查当前角色/城市并审计，带来源版本的投影不是权威业务成功。
+
+协议维持 HTTPS/JSON + RabbitMQ + 客户端短轮询，没有选择 gRPC/WebSocket，无须虚构 proto 或 WebSocket 文件。expireInvitation/expireMatchingDeadline/applyVerifiedPaymentFact 是本地事务方法；地图/通知/支付为服务内适配器端口，尚未指定供应商真实 URL/签名参数，不能声称完成真实集成。
+
+实际命令和结果见 [本卡检查记录](checks/core-api-71199996.md)。李全昊待核对字段、权限及数据所有者，刘子扬待核对事件、版本与重复/未知操作；PR 链接、人员确认在真实发生后记录。本次静态检查不能替代人工评审、并发执行、真实鉴权或渠道验签测试。
 
 ## 系统整体架构图（5 分）
 

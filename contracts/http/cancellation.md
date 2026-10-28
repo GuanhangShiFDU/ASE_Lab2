@@ -62,7 +62,7 @@ S-07 按 `(eventId,recipientId,channel)` 保存投递任务后 ACK。取消通�
 
 ## 图中内部方法及既有事件
 
-内部调用仍为有服务身份的 HTTPS/JSON，具体 HTTP 绑定由 #71199996 统一；它们不是外部可调用接口。
+内部调用仍为有服务身份的 HTTPS/JSON，具体 HTTP 绑定现见 #71199996 的 internal.yaml；它们不是外部可调用接口。
 
 | 方法 | 调用方 → 提供方 | 输入 → 输出及失败语义 |
 | --- | --- | --- |
@@ -92,3 +92,5 @@ S-07 按 `(eventId,recipientId,channel)` 保存投递任务后 ACK。取消通�
 ```
 
 Windows 路径为 `.venv/Scripts/python.exe`。检查覆盖字段结构、示例关联及本卡明确写出的设计不变量；不是运行了数据库事务、消息故障或真实并发测试。设计场景和待确认项见 [本卡检查记录](../../docs/checks/cancellation-71199994.md)。
+
+内部 HTTP 路径和 query cursor 的统一绑定现见 [#71199996 接口总览](core-api.md) 与 [internal.yaml](internal.yaml)；confirmBoardingAndStartTrip 已由 #71199995 补齐，不再是待实现的契约占位。

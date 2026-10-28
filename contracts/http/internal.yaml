@@ -1,0 +1,2462 @@
+openapi: 3.1.0
+info:
+  title: Lab2 service-to-service contracts
+  version: 0.4.0-contract-review
+  description: 设计用内部 HTTPS/JSON。默认拒绝公网；serviceAuth 与 scope/城市/可信委托同时核验。每个操作的 server 是独立服务的虚构域名。
+security:
+- serviceAuth: []
+paths:
+  /internal/v1/quotes/{quoteId}:
+    get:
+      operationId: getQuoteSnapshot
+      tags:
+      - pricing-service
+      servers:
+      - url: https://pricing-service.example.invalid
+      summary: getQuoteSnapshot
+      description: S-02 保存不可变报价与原规则快照。仅本人委托；S-02 在首次建单时以自己的裁决时间检查 expiresAt；本读取不消耗报价、不重算。
+      x-owner: pricing-service
+      x-callers:
+      - ride-service
+      x-required-scope: getQuoteSnapshot
+      x-delegated-subject-required: true
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteSnapshot'
+              example:
+                quote:
+                  quoteId: quote-booking-01
+                  cityId: shanghai
+                  pickup:
+                    latitude: 31.2304
+                    longitude: 121.4737
+                    coordinateSystem: WGS84
+                  destination:
+                    latitude: 31.219
+                    longitude: 121.445
+                    coordinateSystem: WGS84
+                  estimatedAmountMinor: 2800
+                  currency: CNY
+                  estimatedDistanceMeters: 6200
+                  estimatedDurationSeconds: 1100
+                  fareRuleVersionId: fare-sh-20261027-v1
+                  cancellationRule:
+                    cancellationRuleVersionId: cancel-v1
+                    graceSeconds: 120
+                    feeMinor: 500
+                    currency: CNY
+                  createdAt: '2026-10-27T02:00:00Z'
+                  expiresAt: '2026-10-27T02:02:00Z'
+                passengerId: passenger-booking-01
+                fareRuleSnapshot:
+                  fareRuleVersionId: fare-sh-20261027-v1
+                  baseMinor: 900
+                  ratePerMeterMinor: '0.11'
+                  ratePerSecondMinor: '1'
+                  minimumMinor: 1000
+                  roundingPolicy: HALF_UP
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: Delegation-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 受信身份组件签发，绑定当前服务/受众/用户/权限/短有效期并验证；不得转信客户端自填 passengerId。凭据不写日志。
+      - name: quoteId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+  /internal/v1/ride-orders/{rideOrderId}/matching:
+    get:
+      operationId: getMatchingOrder
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: getMatchingOrder
+      description: 受限匹配服务，限定授权城市。返回当前状态（包括已终态）而非伪造 MATCHING；当前邀请变化使用 aggregateVersion，不能用 stateVersion 替代。
+      x-owner: ride-service
+      x-callers:
+      - dispatch-service
+      x-required-scope: getMatchingOrder
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchingOrder'
+              example:
+                order:
+                  rideOrderId: order-booking-01
+                  quoteId: quote-booking-01
+                  sourceOrderId: null
+                  cityId: shanghai
+                  state: MATCHING
+                  stateVersion: 1
+                  assignedDriverId: null
+                  createdAt: '2026-10-27T02:00:20Z'
+                  matchDeadline: '2026-10-27T02:01:20Z'
+                  acceptedAt: null
+                  serverTime: '2026-10-27T02:00:20Z'
+                  source: ride-service
+                pickup:
+                  latitude: 31.2304
+                  longitude: 121.4737
+                  coordinateSystem: WGS84
+                destination:
+                  latitude: 31.219
+                  longitude: 121.445
+                  coordinateSystem: WGS84
+                aggregateVersion: 1
+                pendingInvitation: null
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: rideOrderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+  /internal/v1/location-candidates/search:
+    post:
+      operationId: findCandidateLocations
+      tags:
+      - location-service
+      servers:
+      - url: https://location-service.example.invalid
+      summary: findCandidateLocations
+      description: 只读搜索。服务端校验有效新点与城市、年龄<=15秒；成功空列表与503故障区别。半径/数量上限是本组接口保护提案。
+      x-owner: location-service
+      x-callers:
+      - dispatch-service
+      x-required-scope: findCandidateLocations
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Candidates'
+              example:
+                items:
+                - driverId: driver-booking-01
+                  cityId: shanghai
+                  point:
+                    latitude: 31.2304
+                    longitude: 121.4737
+                    coordinateSystem: WGS84
+                  locationVersion: 20
+                  lastValidReceivedAt: '2026-10-28T02:00:00Z'
+                serverTime: '2026-10-28T02:00:00Z'
+        '400':
+          description: INVALID_REQUEST; INVALID_COORDINATE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+                INVALID_COORDINATE:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_COORDINATE
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - INVALID_COORDINATE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateRequest'
+            example:
+              cityId: shanghai
+              pickup:
+                latitude: 31.2304
+                longitude: 121.4737
+                coordinateSystem: WGS84
+              radiusMeters: 3000
+              limit: 20
+  /internal/v1/drivers/eligibility:
+    post:
+      operationId: getDriverEligibility
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: getDriverEligibility
+      description: 只读批量资格快照，不占用司机；只允许授权城市候选，越界拒绝整次请求。候选缺失则不返回其项，不能推断其合格。
+      x-owner: ride-service
+      x-callers:
+      - dispatch-service
+      x-required-scope: getDriverEligibility
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverEligibility'
+              example:
+                items:
+                - driverId: driver-booking-01
+                  onlineIntent: false
+                  serviceCityId: shanghai
+                  activeOrderId: null
+                  availabilityVersion: 2
+                  changedAt: '2026-10-28T02:00:00Z'
+                serverTime: '2026-10-28T02:00:00Z'
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverIds'
+            example:
+              driverIds:
+              - driver-booking-01
+  /internal/v1/ride-orders/{rideOrderId}/invitations:
+    post:
+      operationId: proposeInvitation
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: proposeInvitation
+      description: proposalId 作用域为(服务身份,方法,键)，指纹含路径和完整 body；先恢复原提议。首次本地事务重验 MATCHING、截止时间、无 PENDING、aggregateVersion 及同城在线/空闲资格；原子写唯一
+        PENDING 与 Outbox。不是已接单。
+      x-owner: ride-service
+      x-callers:
+      - dispatch-service
+      x-required-scope: proposeInvitation
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+              example:
+                invitationId: invite-demo-01
+                rideOrderId: order-demo-01
+                driverId: driver-demo-01
+                createdAt: '2026-10-27T02:00:02Z'
+                expiresAt: '2026-10-27T02:00:17Z'
+                state: PENDING
+                cityId: shanghai
+                matchDeadline: '2026-10-27T02:01:00Z'
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE; OPERATION_PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+                OPERATION_PENDING:
+                  $ref: ./openapi.yaml#/components/examples/OPERATION_PENDING
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '409':
+          description: IDEMPOTENCY_CONFLICT; ORDER_STATE_CONFLICT; AGGREGATE_VERSION_CONFLICT; DRIVER_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                IDEMPOTENCY_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/IDEMPOTENCY_CONFLICT
+                ORDER_STATE_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/ORDER_STATE_CONFLICT
+                AGGREGATE_VERSION_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/AGGREGATE_VERSION_CONFLICT
+                DRIVER_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DRIVER_UNAVAILABLE
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - IDEMPOTENCY_CONFLICT
+      - ORDER_STATE_CONFLICT
+      - AGGREGATE_VERSION_CONFLICT
+      - DRIVER_UNAVAILABLE
+      - OPERATION_PENDING
+      parameters:
+      - name: rideOrderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Proposal'
+            example:
+              driverId: driver-booking-01
+              matchPlanId: plan-demo-01
+              expectedAggregateVersion: 1
+              proposalId: proposal-demo-01
+  /internal/v1/ride-orders/{rideOrderId}/no-candidates:
+    post:
+      operationId: finishMatchingNoCandidates
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: finishMatchingNoCandidates
+      description: 仅成功完成候选搜索且确认无可用候选时调用，依赖故障禁止调用。按 proposalId 原键恢复；重验本单MATCHING、无PENDING、未过期且aggregateVersion一致；提交MATCH_FAILED、按本单释放槽位、Outbox。到总期限由本地截止任务裁决。
+      x-owner: ride-service
+      x-callers:
+      - dispatch-service
+      x-required-scope: finishMatchingNoCandidates
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideOrder'
+              example:
+                rideOrderId: order-booking-01
+                quoteId: quote-booking-01
+                sourceOrderId: null
+                cityId: shanghai
+                state: MATCH_FAILED
+                stateVersion: 2
+                assignedDriverId: null
+                createdAt: '2026-10-27T02:00:20Z'
+                matchDeadline: '2026-10-27T02:01:20Z'
+                acceptedAt: null
+                serverTime: '2026-10-27T02:00:20Z'
+                source: ride-service
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE; OPERATION_PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+                OPERATION_PENDING:
+                  $ref: ./openapi.yaml#/components/examples/OPERATION_PENDING
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '409':
+          description: IDEMPOTENCY_CONFLICT; ORDER_STATE_CONFLICT; AGGREGATE_VERSION_CONFLICT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                IDEMPOTENCY_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/IDEMPOTENCY_CONFLICT
+                ORDER_STATE_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/ORDER_STATE_CONFLICT
+                AGGREGATE_VERSION_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/AGGREGATE_VERSION_CONFLICT
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - IDEMPOTENCY_CONFLICT
+      - ORDER_STATE_CONFLICT
+      - AGGREGATE_VERSION_CONFLICT
+      - OPERATION_PENDING
+      parameters:
+      - name: rideOrderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoCandidatesRequest'
+            example:
+              matchPlanId: plan-demo-01
+              expectedAggregateVersion: 1
+              proposalId: proposal-none-01
+  /internal/v1/drivers/{driverId}/location-proof:
+    get:
+      operationId: getFreshLocationProof
+      tags:
+      - location-service
+      servers:
+      - url: https://location-service.example.invalid
+      summary: getFreshLocationProof
+      description: 核验城市和服务权限，返回年龄<=15秒的最新有效点。S-02 接单事务再次检查年龄与当前城市，读取成功不预占司机。陈旧409；依赖故障503。
+      x-owner: location-service
+      x-callers:
+      - ride-service
+      x-required-scope: getFreshLocationProof
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationProof'
+              example:
+                driverId: driver-booking-01
+                cityId: shanghai
+                point:
+                  latitude: 31.2304
+                  longitude: 121.4737
+                  coordinateSystem: WGS84
+                locationVersion: 20
+                lastValidReceivedAt: '2026-10-28T02:00:00Z'
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '409':
+          description: LOCATION_STALE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                LOCATION_STALE:
+                  $ref: ./openapi.yaml#/components/examples/LOCATION_STALE
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - LOCATION_STALE
+      parameters:
+      - name: cityId
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/CityId'
+      - name: driverId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+  /internal/v1/ride-orders/{rideOrderId}/location-authorization:
+    get:
+      operationId: authorizeOrderLocation
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: authorizeOrderLocation
+      description: 核验委托乘客归属且状态为ASSIGNED/ARRIVED/IN_TRIP；拒绝403。成功缓存最长5秒，分配/终态改变立即失效；不明则拒绝，不暴露任意司机轨迹。
+      x-owner: ride-service
+      x-callers:
+      - location-service
+      x-required-scope: authorizeOrderLocation
+      x-delegated-subject-required: true
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationAuthorization'
+              example:
+                rideOrderId: order-booking-01
+                driverId: driver-booking-01
+                stateVersion: 2
+                allowed: true
+                expiresAt: '2026-10-28T02:00:05Z'
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN; LOCATION_NOT_AUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+                LOCATION_NOT_AUTHORIZED:
+                  $ref: ./openapi.yaml#/components/examples/LOCATION_NOT_AUTHORIZED
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - LOCATION_NOT_AUTHORIZED
+      parameters:
+      - name: Delegation-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 受信身份组件签发，绑定当前服务/受众/用户/权限/短有效期并验证；不得转信客户端自填 passengerId。凭据不写日志。
+      - name: rideOrderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+  /internal/v1/ride-orders/{rideOrderId}/cancellation-fact:
+    get:
+      operationId: getCancellationFact
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: getCancellationFact
+      description: 单笔费用页需要所属乘客委托；内部恢复作业改走受城市权限控制的扫描。data 与 E07 一致，sourceVersion=该源事实的 aggregateVersion；不存在404，不创造取消/费用。
+      x-owner: ride-service
+      x-callers:
+      - pricing-service
+      x-required-scope: getCancellationFact
+      x-delegated-subject-required: true
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationFact'
+              example:
+                data:
+                  rideOrderId: order-demo-cancel
+                  passengerId: passenger-demo-03
+                  stateVersion: 3
+                  cancellationId: cancel-demo-01
+                  driverId: driver-demo-03
+                  state: CANCELLED
+                  previousState: ASSIGNED
+                  actorId: user-demo-03
+                  actorRole: PASSENGER
+                  reason: PLANS_CHANGED
+                  acceptedAt: '2026-10-27T02:00:10Z'
+                  cancelledAt: '2026-10-27T02:02:10Z'
+                  cancellationRuleVersionId: cancel-sh-01
+                  ruleSnapshot:
+                    graceSeconds: 120
+                    feeMinor: 500
+                    currency: CNY
+                cityId: shanghai
+                sourceVersion: 1
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: Delegation-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 受信身份组件签发，绑定当前服务/受众/用户/权限/短有效期并验证；不得转信客户端自填 passengerId。凭据不写日志。
+      - name: rideOrderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+  /internal/v1/cancellation-facts:
+    get:
+      operationId: listCancellationFacts
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: listCancellationFacts
+      description: 按授权城市与不可变提交游标扫描，不按客户端时间。首次cursor省略；下一页使用nextCursor，过期400 INVALID_CURSOR必须从保留事实重建检查点并去重，不能跳过。消费者先持久Job再推进游标。既有文档
+        afterCursor 逻辑参数统一绑定到 query cursor。
+      x-owner: ride-service
+      x-callers:
+      - pricing-service recovery
+      x-required-scope: listCancellationFacts
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationFactPage'
+              example:
+                items:
+                - data:
+                    rideOrderId: order-demo-cancel
+                    passengerId: passenger-demo-03
+                    stateVersion: 3
+                    cancellationId: cancel-demo-01
+                    driverId: driver-demo-03
+                    state: CANCELLED
+                    previousState: ASSIGNED
+                    actorId: user-demo-03
+                    actorRole: PASSENGER
+                    reason: PLANS_CHANGED
+                    acceptedAt: '2026-10-27T02:00:10Z'
+                    cancelledAt: '2026-10-27T02:02:10Z'
+                    cancellationRuleVersionId: cancel-sh-01
+                    ruleSnapshot:
+                      graceSeconds: 120
+                      feeMinor: 500
+                      currency: CNY
+                  cityId: shanghai
+                  sourceVersion: 1
+                nextCursor: cursor-demo-cancellationfactpage
+                hasMore: false
+        '400':
+          description: INVALID_REQUEST; INVALID_CURSOR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+                INVALID_CURSOR:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_CURSOR
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - INVALID_CURSOR
+      parameters:
+      - &id001
+        name: cityId
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/CityId'
+      - &id002
+        name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 512
+      - &id003
+        name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+  /internal/v1/trips/{tripId}/fact:
+    get:
+      operationId: getTripFact
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: getTripFact
+      description: 单笔查询核验受信乘客委托；费用恢复限定服务scope/城市，使用专门 fact-recovery scope，可不传用户委托。读取原规则/计量事实；sourceVersion 为当前源事件序号，不是stateVersion；GET不补计量。
+      x-owner: ride-service
+      x-callers:
+      - pricing-service
+      x-required-scope: trip-fact:read or trip-fact:recover
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripFact'
+              example:
+                tripResult:
+                  trip:
+                    tripId: trip-flow-01
+                    rideOrderId: order-trip-01
+                    passengerId: passenger-trip-01
+                    driverId: driver-trip-01
+                    fareRuleVersionId: fare-trip-01
+                    state: COMPLETED
+                    boardingConfirmedAt: '2026-10-28T02:03:30Z'
+                    startedAt: '2026-10-28T02:03:30Z'
+                    endedAt: '2026-10-28T02:15:30Z'
+                    measurement:
+                      actualDistanceMeters: 8000
+                      durationSeconds: 720
+                      measurementVersion: 1
+                      meteringSource: verified-meter-demo
+                  rideOrderState: COMPLETED
+                  stateVersion: 5
+                  serverTime: '2026-10-28T02:15:35Z'
+                  source: ride-service
+                cityId: shanghai
+                fareRuleSnapshot:
+                  fareRuleVersionId: fare-trip-01
+                  baseMinor: 900
+                  ratePerMeterMinor: '0.11'
+                  ratePerSecondMinor: '1'
+                  minimumMinor: 1000
+                  roundingPolicy: HALF_UP
+                sourceVersion: 7
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: tripId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+      - name: Delegation-Token
+        in: header
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 普通读取必填；只有持有trip-fact:recover且城市匹配的恢复作业可省略。缺两者403。
+  /internal/v1/completed-trip-facts:
+    get:
+      operationId: listCompletedTripFacts
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: listCompletedTripFacts
+      description: 授权城市，稳定提交游标涵盖完成与首次计量补齐，重叠页幂等。不能按startedAt/客户端时间跳过事实；同Trip多版本允许，持久恢复原Job后才推进。游标过期按完整保留事实重建，不跳页。
+      x-owner: ride-service
+      x-callers:
+      - pricing-service recovery
+      x-required-scope: listCompletedTripFacts
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripFactPage'
+              example:
+                items:
+                - tripResult:
+                    trip:
+                      tripId: trip-flow-01
+                      rideOrderId: order-trip-01
+                      passengerId: passenger-trip-01
+                      driverId: driver-trip-01
+                      fareRuleVersionId: fare-trip-01
+                      state: COMPLETED
+                      boardingConfirmedAt: '2026-10-28T02:03:30Z'
+                      startedAt: '2026-10-28T02:03:30Z'
+                      endedAt: '2026-10-28T02:15:30Z'
+                      measurement:
+                        actualDistanceMeters: 8000
+                        durationSeconds: 720
+                        measurementVersion: 1
+                        meteringSource: verified-meter-demo
+                    rideOrderState: COMPLETED
+                    stateVersion: 5
+                    serverTime: '2026-10-28T02:15:35Z'
+                    source: ride-service
+                  cityId: shanghai
+                  fareRuleSnapshot:
+                    fareRuleVersionId: fare-trip-01
+                    baseMinor: 900
+                    ratePerMeterMinor: '0.11'
+                    ratePerSecondMinor: '1'
+                    minimumMinor: 1000
+                    roundingPolicy: HALF_UP
+                  sourceVersion: 7
+                nextCursor: cursor-demo-tripfactpage
+                hasMore: false
+        '400':
+          description: INVALID_REQUEST; INVALID_CURSOR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+                INVALID_CURSOR:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_CURSOR
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - INVALID_CURSOR
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+  /internal/v1/trips/{tripId}/measurement:
+    post:
+      operationId: supplyTripMeasurement
+      tags:
+      - ride-service
+      servers:
+      - url: https://ride-service.example.invalid
+      summary: supplyTripMeasurement
+      description: 需独立计量写scope、限定来源/城市；Idempotency-Key即图中的operationId。S-02读取并核验可信证据，不接受司机给出价格/任意距离。仅COMPLETED且缺依据可首次冻结；同键恢复，异键同依据返回已有值，异依据409并隔离人工，不能改已有费用。
+      x-owner: ride-service
+      x-callers:
+      - authorized metering recovery job
+      x-required-scope: trip-measurement:write
+      x-delegated-subject-required: false
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripMeasurement'
+              example:
+                actualDistanceMeters: 8000
+                durationSeconds: 720
+                measurementVersion: 1
+                meteringSource: verified-meter-demo
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE; OPERATION_PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+                OPERATION_PENDING:
+                  $ref: ./openapi.yaml#/components/examples/OPERATION_PENDING
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '409':
+          description: IDEMPOTENCY_CONFLICT; MEASUREMENT_CONFLICT; ORDER_STATE_CONFLICT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                IDEMPOTENCY_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/IDEMPOTENCY_CONFLICT
+                MEASUREMENT_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/MEASUREMENT_CONFLICT
+                ORDER_STATE_CONFLICT:
+                  $ref: ./openapi.yaml#/components/examples/ORDER_STATE_CONFLICT
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      - IDEMPOTENCY_CONFLICT
+      - MEASUREMENT_CONFLICT
+      - ORDER_STATE_CONFLICT
+      - OPERATION_PENDING
+      parameters:
+      - $ref: ./openapi.yaml#/components/parameters/IdempotencyKey
+      - name: tripId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementEvidence'
+            example:
+              evidenceRef: meter-evidence-demo-01
+  /internal/v1/bills/{billId}/snapshot:
+    get:
+      operationId: getBillSnapshot
+      tags:
+      - pricing-service
+      servers:
+      - url: https://pricing-service.example.invalid
+      summary: getBillSnapshot
+      description: 纯不可变费用快照，核验受信乘客归属，不聚合支付状态，避免 S-04↔S-06 循环。不存在404/故障503；不自动生成Bill。
+      x-owner: pricing-service
+      x-callers:
+      - payment-service
+      x-required-scope: getBillSnapshot
+      x-delegated-subject-required: true
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillSnapshot'
+              example:
+                billId: bill-trip-01
+                billVersion: 1
+                rideOrderId: order-trip-01
+                passengerId: passenger-trip-01
+                cityId: shanghai
+                kind: TRIP_FARE
+                amountMinor: 2500
+                currency: CNY
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: Delegation-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 受信身份组件签发，绑定当前服务/受众/用户/权限/短有效期并验证；不得转信客户端自填 passengerId。凭据不写日志。
+      - name: billId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+  /internal/v1/bills/{billId}/payment-state:
+    get:
+      operationId: getBillPaymentStateInternal
+      tags:
+      - payment-service
+      servers:
+      - url: https://payment-service.example.invalid
+      summary: getBillPaymentStateInternal
+      description: 图中逻辑名 getBillPaymentState 的服务委托入口；与公网响应相同，独立内部凭据加委托核验。S-04故障时展示UNKNOWN，不能猜UNPAID。
+      x-owner: payment-service
+      x-callers:
+      - pricing-service
+      x-required-scope: getBillPaymentStateInternal
+      x-delegated-subject-required: true
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPaymentState'
+              example:
+                billId: bill-trip-01
+                billVersion: 1
+                amountMinor: 2500
+                currency: CNY
+                status: PAID
+                currentAttempt: null
+                receipt:
+                  receiptId: receipt-trip-01
+                  billId: bill-trip-01
+                  paymentAttemptId: attempt-trip-01
+                  amountMinor: 2500
+                  currency: CNY
+                  paidAt: '2026-10-28T02:16:02Z'
+                serverTime: '2026-10-28T02:16:10Z'
+                source: payment-service
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: Delegation-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 受信身份组件签发，绑定当前服务/受众/用户/权限/短有效期并验证；不得转信客户端自填 passengerId。凭据不写日志。
+      - name: billId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Id'
+      x-logical-method: getBillPaymentState
+  /internal/v1/operations-authorization:
+    get:
+      operationId: authorizeOperationsQuery
+      tags:
+      - participant-service
+      servers:
+      - url: https://participant-service.example.invalid
+      summary: authorizeOperationsQuery
+      description: 对当前委托者重新核验运营角色/城市范围，失效或无权403、故障503。S-08每次业务查询调用，不能以先前成功结果延长权限；受信委托证明身份不代替当前权限检查。
+      x-owner: participant-service
+      x-callers:
+      - operations-service
+      x-required-scope: authorizeOperationsQuery
+      x-delegated-subject-required: true
+      responses:
+        '200':
+          description: 已授权权威结果；恢复读不产生新业务。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAuthorization'
+              example:
+                operatorId: operator-demo-01
+                cityId: shanghai
+                allowed: true
+                accountVersion: 3
+                checkedAt: '2026-10-28T02:00:00Z'
+        '400':
+          description: INVALID_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                INVALID_REQUEST:
+                  $ref: ./openapi.yaml#/components/examples/INVALID_REQUEST
+        '401':
+          description: UNAUTHENTICATED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                UNAUTHENTICATED:
+                  $ref: ./openapi.yaml#/components/examples/UNAUTHENTICATED
+        '403':
+          description: FORBIDDEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                FORBIDDEN:
+                  $ref: ./openapi.yaml#/components/examples/FORBIDDEN
+        '404':
+          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                NOT_FOUND:
+                  $ref: ./openapi.yaml#/components/examples/NOT_FOUND
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                RATE_LIMITED:
+                  $ref: ./openapi.yaml#/components/examples/RATE_LIMITED
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+        '503':
+          description: DEPENDENCY_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                DEPENDENCY_UNAVAILABLE:
+                  $ref: ./openapi.yaml#/components/examples/DEPENDENCY_UNAVAILABLE
+          headers:
+            Retry-After:
+              description: 建议等待秒数；暂不可用可以省略，限流必须提供。不能因此换幂等键。
+              schema:
+                type: integer
+                minimum: 1
+              example: 5
+      x-error-codes:
+      - INVALID_REQUEST
+      - UNAUTHENTICATED
+      - FORBIDDEN
+      - NOT_FOUND
+      - RATE_LIMITED
+      - DEPENDENCY_UNAVAILABLE
+      parameters:
+      - name: cityId
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/CityId'
+      - name: Delegation-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        description: 受信身份组件签发，绑定当前服务/受众/用户/权限/短有效期并验证；不得转信客户端自填 passengerId。凭据不写日志。
+components:
+  securitySchemes:
+    serviceAuth:
+      type: http
+      scheme: bearer
+      description: 仅受信服务凭据；验证签发方、受众、到期、服务身份和 scope；不能接收普通用户 token。
+  schemas:
+    Id:
+      $ref: ./openapi.yaml#/components/schemas/Id
+    UtcTime:
+      $ref: ./openapi.yaml#/components/schemas/UtcTime
+    Version:
+      $ref: ./openapi.yaml#/components/schemas/Version
+    CityId:
+      $ref: ./openapi.yaml#/components/schemas/CityId
+    Point:
+      $ref: ./openapi.yaml#/components/schemas/Point
+    Error:
+      $ref: ./openapi.yaml#/components/schemas/Error
+    DriverServiceState:
+      $ref: ./openapi.yaml#/components/schemas/DriverServiceState
+    TripMeasurement:
+      $ref: ./openapi.yaml#/components/schemas/TripMeasurement
+    Cancellation:
+      $ref: ./openapi.yaml#/components/schemas/Cancellation
+    Quote:
+      $ref: ./openapi.yaml#/components/schemas/Quote
+    RideOrder:
+      $ref: ./openapi.yaml#/components/schemas/RideOrder
+    Invitation:
+      $ref: ./openapi.yaml#/components/schemas/Invitation
+    TripResult:
+      $ref: ./openapi.yaml#/components/schemas/TripResult
+    BillPaymentState:
+      $ref: ./openapi.yaml#/components/schemas/BillPaymentState
+    FareRuleSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        fareRuleVersionId:
+          $ref: '#/components/schemas/Id'
+        baseMinor: &id004
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        ratePerMeterMinor:
+          type: string
+          pattern: ^[0-9]+(\.[0-9]+)?$
+        ratePerSecondMinor:
+          type: string
+          pattern: ^[0-9]+(\.[0-9]+)?$
+        minimumMinor: *id004
+        roundingPolicy:
+          type: string
+          enum:
+          - HALF_UP
+      required:
+      - fareRuleVersionId
+      - baseMinor
+      - ratePerMeterMinor
+      - ratePerSecondMinor
+      - minimumMinor
+      - roundingPolicy
+    QuoteSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        quote:
+          $ref: '#/components/schemas/Quote'
+        passengerId:
+          $ref: '#/components/schemas/Id'
+        fareRuleSnapshot:
+          $ref: '#/components/schemas/FareRuleSnapshot'
+      required:
+      - quote
+      - passengerId
+      - fareRuleSnapshot
+    MatchingOrder:
+      type: object
+      additionalProperties: false
+      properties:
+        order:
+          $ref: '#/components/schemas/RideOrder'
+        pickup:
+          $ref: '#/components/schemas/Point'
+        destination:
+          $ref: '#/components/schemas/Point'
+        aggregateVersion:
+          $ref: '#/components/schemas/Version'
+        pendingInvitation:
+          oneOf:
+          - $ref: '#/components/schemas/Invitation'
+          - type: 'null'
+      required:
+      - order
+      - pickup
+      - destination
+      - aggregateVersion
+      - pendingInvitation
+    CandidateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        pickup:
+          $ref: '#/components/schemas/Point'
+        radiusMeters:
+          type: integer
+          minimum: 1
+          maximum: 50000
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+      required:
+      - cityId
+      - pickup
+      - radiusMeters
+      - limit
+    LocationProof:
+      type: object
+      additionalProperties: false
+      properties:
+        driverId:
+          $ref: '#/components/schemas/Id'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        point:
+          $ref: '#/components/schemas/Point'
+        locationVersion:
+          $ref: '#/components/schemas/Version'
+        lastValidReceivedAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+      - driverId
+      - cityId
+      - point
+      - locationVersion
+      - lastValidReceivedAt
+    Candidates:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationProof'
+          maxItems: 100
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+      - items
+      - serverTime
+    DriverIds:
+      type: object
+      additionalProperties: false
+      properties:
+        driverIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+          maxItems: 100
+          minItems: 1
+          uniqueItems: true
+      required:
+      - driverIds
+    DriverEligibility:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DriverServiceState'
+          maxItems: 100
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+      - items
+      - serverTime
+    Proposal:
+      type: object
+      additionalProperties: false
+      properties:
+        driverId:
+          $ref: '#/components/schemas/Id'
+        matchPlanId:
+          $ref: '#/components/schemas/Id'
+        expectedAggregateVersion:
+          $ref: '#/components/schemas/Version'
+        proposalId:
+          $ref: '#/components/schemas/Id'
+      required:
+      - driverId
+      - matchPlanId
+      - expectedAggregateVersion
+      - proposalId
+    NoCandidatesRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        matchPlanId:
+          $ref: '#/components/schemas/Id'
+        expectedAggregateVersion:
+          $ref: '#/components/schemas/Version'
+        proposalId:
+          $ref: '#/components/schemas/Id'
+      required:
+      - matchPlanId
+      - expectedAggregateVersion
+      - proposalId
+    LocationAuthorization:
+      type: object
+      additionalProperties: false
+      properties:
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        driverId:
+          $ref: '#/components/schemas/Id'
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+        allowed:
+          const: true
+        expiresAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+      - rideOrderId
+      - driverId
+      - stateVersion
+      - allowed
+      - expiresAt
+    CancellationFact:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: ../events/event.schema.json#/$defs/ride.order-cancelled.v1
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        sourceVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - data
+      - cityId
+      - sourceVersion
+    CancellationFactPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CancellationFact'
+          maxItems: 100
+        nextCursor:
+          type: string
+          minLength: 1
+          maxLength: 512
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - nextCursor
+      - hasMore
+    TripFact:
+      type: object
+      additionalProperties: false
+      properties:
+        tripResult:
+          $ref: '#/components/schemas/TripResult'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        fareRuleSnapshot:
+          $ref: '#/components/schemas/FareRuleSnapshot'
+        sourceVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - tripResult
+      - cityId
+      - fareRuleSnapshot
+      - sourceVersion
+    TripFactPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripFact'
+          maxItems: 100
+        nextCursor:
+          type: string
+          minLength: 1
+          maxLength: 512
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - nextCursor
+      - hasMore
+    MeasurementEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        evidenceRef:
+          $ref: '#/components/schemas/Id'
+      required:
+      - evidenceRef
+    BillSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        billId:
+          $ref: '#/components/schemas/Id'
+        billVersion:
+          $ref: '#/components/schemas/Version'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        passengerId:
+          $ref: '#/components/schemas/Id'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        kind:
+          type: string
+          enum:
+          - TRIP_FARE
+          - CANCELLATION_FEE
+        amountMinor: *id004
+        currency:
+          type: string
+          enum:
+          - CNY
+      required:
+      - billId
+      - billVersion
+      - rideOrderId
+      - passengerId
+      - cityId
+      - kind
+      - amountMinor
+      - currency
+    OperationsAuthorization:
+      type: object
+      additionalProperties: false
+      properties:
+        operatorId:
+          $ref: '#/components/schemas/Id'
+        cityId:
+          $ref: '#/components/schemas/CityId'
+        allowed:
+          const: true
+        accountVersion:
+          $ref: '#/components/schemas/Version'
+        checkedAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+      - operatorId
+      - cityId
+      - allowed
+      - accountVersion
+      - checkedAt

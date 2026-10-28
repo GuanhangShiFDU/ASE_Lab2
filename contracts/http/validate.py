@@ -25,6 +25,16 @@ def main():
             if 'schema' in value and 'example' in value:
                 validator(value['schema']).validate(value['example'])
                 checked += 1
+            if 'schema' in value:
+                for example in value.get('examples', {}).values():
+                    if '$ref' in example:
+                        target = spec
+                        for part in example['$ref'][2:].split('/'):
+                            target = target[part]
+                        example = target
+                    if 'value' in example:
+                        validator(value['schema']).validate(example['value'])
+                        checked += 1
             for child in value.values():
                 visit(child)
         elif isinstance(value, list):

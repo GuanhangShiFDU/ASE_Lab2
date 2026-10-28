@@ -1,6 +1,6 @@
 # 报价、叫车与接单契约
 
-任务：#71199991；基线：`bada6eb9aa0300487b93facb4e0c157fe4937f58`。本文件给流程图提供确定的方法名、权限和恢复语义，配套 [OpenAPI](openapi.yaml) 定义 9 个客户端核心操作。它是设计草案，没有可调用服务器；示例均为虚构数据。#71199996 继续补齐其余流程和辅助接口，不能将本卡算作全部 API 已完成。
+任务：#71199991；基线：`bada6eb9aa0300487b93facb4e0c157fe4937f58`。本文件给流程图提供确定的方法名、权限和恢复语义，配套 [OpenAPI](openapi.yaml) 定义 9 个客户端核心操作。它是设计草案，没有可调用服务器；示例均为虚构数据。#71199996 现已在 [接口总览](core-api.md) 汇总其余流程和辅助接口；本文件保留叫车语义。
 
 ## 共同约定
 
@@ -26,7 +26,7 @@
 | `listDriverInvitations` / GET `/v1/me/invitations` | 司机 → S-02 | 认证主体 → 当前有效邀请列表 | 只含本人的有效 PENDING；司机可收到不同订单邀请，但最多成功占用一单 |
 | `acceptInvitation` / POST `/v1/invitations/{invitationId}/accept` | 受邀司机 → S-02 | invitationId、原操作键；无请求体 → DecisionResult | 位置证明在事务外获取；截止时间、订单、邀请、在线/同城/占用在本地裁决时重验 |
 | `rejectInvitation` / POST `/v1/invitations/{invitationId}/reject` | 受邀司机 → S-02 | invitationId、原操作键；无请求体 → DecisionResult | 只拒绝邀请，不取消订单；REJECTED 不占用司机，不推进订单 stateVersion |
-| `getOperationResult` / GET `/v1/me/operations/{operationId}?operationType=…` | 原操作者 → S-02 | 原键、方法名 → SUCCEEDED / REJECTED / PENDING / NOT_OBSERVED | 查询已有结果快照；后两者都不是失败证明。只有该主体可查询 |
+| `getOperationResult` / GET `/v1/me/operations/{operationId}?operationType=…` | 原操作者 → 写入所有者（按 operationType 路由） | 原键、方法名 → SUCCEEDED / REJECTED / PENDING / NOT_OBSERVED | 查询已有结果快照；后两者都不是失败证明。只有该主体可查询 |
 | `getOrderLocation` / GET `/v1/ride-orders/{rideOrderId}/location` | 所属乘客 → S-05 | 订单 ID → 关联司机最新点、新鲜度和时间 | 只允许 ASSIGNED/ARRIVED/IN_TRIP；不能拿任意 driverId 枚举位置 |
 
 `RideOrder` 是本流程所需的查询字段子集，不替代完整逻辑模型。MATCHING/MATCH_FAILED 的 assignedDriverId、acceptedAt 为 null；ASSIGNED/ARRIVED/IN_TRIP/COMPLETED 二者非空；CANCELLED 按取消前是否接单保留事实。createdAt + 60 秒 = matchDeadline。邀请 expiresAt = min(createdAt + 15 秒, matchDeadline)。这些跨字段约束必须由实现和设计评审检查，不能仅依赖字段类型验证。
@@ -50,11 +50,11 @@
 | 503 `ROUTE_UNAVAILABLE` / `DEPENDENCY_UNAVAILABLE` / `STATE_NOT_FRESH` | 地图/依赖/指定最低版本不可用；读请求在预算内重试，写请求保持原键。服务若确认事务未提交可用 outcome=REJECTED，否则用 UNKNOWN |
 | 503 `OPERATION_PENDING`，或无业务响应的传输超时 | 结果未知，查询原 operationId，必要时原键原内容恢复。不能解释为“没有创建订单”或“司机没有接单” |
 
-错误体 `{code,message,requestId,outcome,retryable}`；只有鉴权通过且资源属于该主体时才可附带 rideOrderId/stateVersion。OpenAPI 的公共错误响应展示格式示例，具体错误必须按对应 operation 的 `x-error-codes` 和本表选择，不能把所有 409 都返回 QUOTE_EXPIRED。
+错误体 `{code,message,requestId,outcome,retryable}`；只有鉴权通过且资源属于该主体时才可附带 rideOrderId/stateVersion。OpenAPI 现提供逐操作错误示例，具体错误按对应 operation 的 `x-error-codes`、[统一映射](error-codes.yaml)和本表选择。
 
 ## 服务间方法与外部适配器
 
-这些是本组定义的方法契约，使用第 3 章的同步 HTTPS/JSON；不是新增 gRPC。内部路径由 #71199996 统一，接口名称和语义已固定供图引用。`MapAdapter.estimateRoute` 是本组对地图服务的适配器端口名，不声称是某供应商真实 API。网关转发、身份组件校验和每次 HTTP 返回不分别占用图中生命线。
+这些是本组定义的方法契约，使用第 3 章的同步 HTTPS/JSON；不是新增 gRPC。内部路径已由 #71199996 在 [internal.yaml](internal.yaml) 统一，接口名称和语义保持供图引用。`MapAdapter.estimateRoute` 是本组对地图服务的适配器端口名，不声称是某供应商真实 API。网关转发、身份组件校验和每次 HTTP 返回不分别占用图中生命线。
 
 | 方法 | 调用方 → 提供方 | 输入 → 输出 / 失败条件 |
 | --- | --- | --- |
@@ -73,7 +73,7 @@
 
 expectedAggregateVersion 来自 S-02 的 RideOrder 事件流版本（第 3 章与事件 envelope 已定义），用于避免旧候选方案在邀请已变化后仍生效；它不等于订单 stateVersion。同一事务写多条事件可递增多次。S-03 提议冲突后先重读当前状态，不用旧方案无限重试。邀请 PENDING 不占用司机；司机同时收到不同订单的邀请时，只有一次接受可以设置全局 activeOrderId。
 
-补充入口的业务方法（暂不展开 HTTP 绑定）：S-01 `getMyProfile/updateMyProfile`；S-02 `getDriverServiceState/setDriverAvailability`（离线且无活动单才换城）；S-05 `openLocationSession/reportDriverLocation`（服务端 epoch + sequence，旧点不刷新新鲜度）；S-07 `listMyNotifications`；S-08 `queryOperationsRecords`（按城市授权、返回来源版本和同步时间、审计查询）。输入输出及界面反馈见报告 4.1.1，完整 OpenAPI 由 #71199996 补齐。
+补充入口的业务方法（HTTP 绑定现见 [总览](core-api.md)）：S-01 `getMyProfile/updateMyProfile`；S-02 `getDriverServiceState/setDriverAvailability`（离线且无活动单才换城）；S-05 `openLocationSession/reportDriverLocation`（服务端 epoch + sequence，旧点不刷新新鲜度）；S-07 `listMyNotifications`；S-08 `queryOperationsRecords`（按城市授权、返回来源版本和同步时间、审计查询）。输入输出及界面反馈见报告 4.1.1，完整 OpenAPI 已由 #71199996 补齐。
 
 ## 事实事件对照
 

@@ -1,18 +1,20 @@
 # 核心接口与业务事件
 
-#71199990 已补充服务通信与 13 类事件；#71199991 的 9 个叫车核心操作已合入。#71199994 新增 3 个取消/费用查询操作、取消竞争与恢复语义，本卡 #71199995 新增 8 个接驾/行程/支付操作，当前共 20 个核心 HTTP 操作。其余辅助 API/内部绑定仍待 #71199996 汇总；不代表已实现服务或完成组内评审。
+#71199990 的 13 类事件及 #71199991/94/95 的三条流程已合入。#71199996 汇总 20 个核心 + 8 个辅助客户端操作、16 个内部操作，统一错误码和恢复规则，并核对六张流程图的调用/事件引用。全部为设计契约；服务未实现，人工交叉确认待完成。
 
 ## 文件组织
 
 | 路径 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [http/openapi.yaml](http/openapi.yaml) | HTTP/REST 核心接口契约 | OpenAPI 3.1.0，20 个叫车/接单/取消/行程/支付/查询/恢复操作；其他接口待补 |
+| [http/openapi.yaml](http/openapi.yaml) | HTTP/REST 核心接口契约 | OpenAPI 3.1.0，28 个核心/辅助客户端操作及逐操作示例 |
+| [http/internal.yaml](http/internal.yaml) | 内部 HTTPS 绑定与受信身份/委托 | 16 个操作，相对引用复用公共字段 |
+| [http/core-api.md](http/core-api.md) | 总目录、认证、版本、幂等、错误及适配器边界 | #71199996 统一设计与检查入口 |
 | [http/booking.md](http/booking.md) | 叫车流程方法、异常和恢复语义 | 与第 4.1 节时序图一致的设计定义 |
 | [http/cancellation.md](http/cancellation.md) | 取消、重叫、计价恢复和内部方法 | 与第 4.2 节时序图一致；附示例及静态校验器 |
 | [http/trip-payment.md](http/trip-payment.md) | 接驾、计量、费用与付款恢复 | 与第 4.3 节一致；附虚构链及静态校验器 |
 | [events/README.md](events/README.md) | 业务事件目录、字段和消费语义 | 13 类 v1 事件，附 JSON Schema 与完整示例 |
 
-本轮选择 HTTPS/JSON 请求、短轮询和 RabbitMQ 事实投递，不采用 gRPC/WebSocket，因此无需对应文件。HTTP 交互 C-01～C-18 见设计报告第 3 章；本流程的核心路径、方法、请求/响应、错误体及示例已填入 OpenAPI；#71199996 继续补齐其余流程、内部 HTTP 绑定及辅助接口，保留已确定的 operationId 或同步改图。事件的 JSON Schema 与示例在 `events/` 中，可与 HTTP 契约分开评审。
+本轮选择 HTTPS/JSON 请求、短轮询和 RabbitMQ 事实投递，不采用 gRPC/WebSocket，因此无需对应文件。HTTP 交互 C-01～C-18 见设计报告第 3 章；三条流程的客户端与内部路径、方法、请求/响应、错误体及示例已填入两份 OpenAPI；适配器端口及本地方法在 core-api.md 区分，真实供应商参数须在后续选型时确认。事件的 JSON Schema 与示例在 `events/` 中，可与 HTTP 契约分开评审。
 
 ## 核心接口需要说明什么
 
