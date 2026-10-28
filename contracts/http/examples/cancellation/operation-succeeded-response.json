@@ -1,0 +1,41 @@
+{
+  "operationId": "op-cancel-01",
+  "operationType": "cancelRideOrder",
+  "serverTime": "2026-10-27T02:02:12Z",
+  "status": "SUCCEEDED",
+  "result": {
+    "operationId": "op-cancel-01",
+    "cancellation": {
+      "cancellationId": "cancel-rebook-01",
+      "rideOrderId": "order-rebook-old",
+      "state": "CANCELLED",
+      "stateVersion": 3,
+      "previousState": "ASSIGNED",
+      "actorRole": "PASSENGER",
+      "reason": "PLANS_CHANGED",
+      "driverId": "driver-rebook-01",
+      "acceptedAt": "2026-10-27T02:00:10Z",
+      "cancelledAt": "2026-10-27T02:02:10Z",
+      "cancellationRule": {
+        "cancellationRuleVersionId": "cancel-sh-01",
+        "graceSeconds": 120,
+        "feeMinor": 500,
+        "currency": "CNY"
+      }
+    },
+    "rideOrder": {
+      "rideOrderId": "order-rebook-old",
+      "quoteId": "quote-rebook-old",
+      "sourceOrderId": null,
+      "cityId": "shanghai",
+      "state": "CANCELLED",
+      "stateVersion": 3,
+      "assignedDriverId": "driver-rebook-01",
+      "createdAt": "2026-10-27T02:00:05Z",
+      "matchDeadline": "2026-10-27T02:01:05Z",
+      "acceptedAt": "2026-10-27T02:00:10Z",
+      "serverTime": "2026-10-27T02:02:10Z",
+      "source": "ride-service"
+    }
+  }
+}

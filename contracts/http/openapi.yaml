@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: ASE Lab 2 Ride-hailing API
-  version: 0.1.0-booking-draft
-  description: '#71199991 的报价/叫车/接单/恢复查询最小契约，非已部署服务。#71199996 补齐资料、司机状态/定位写入、取消、行程、费用、支付、通知及运营等接口并统一评审。'
+  version: 0.2.0-cancellation-draft
+  description: '#71199991 的 9 个报价/叫车/接单/恢复操作，加上 #71199994 的 3 个取消/事实/费用查询操作。非已部署服务。行程支付及其余辅助接口由 #71199995/96 完善。'
 servers:
   - url: https://api.example.invalid
     description: 虚构地址，仅为设计示例
@@ -402,10 +402,8 @@ paths:
       tags:
         - ride-service
       summary: 恢复本人未知写请求的原结果
-      description: >-
-        使用原 Idempotency-Key 及 operationType，按认证主体查询 OperationRecord。SUCCEEDED/REJECTED 是已存结果；PENDING
-        或 NOT_OBSERVED 都不能证明失败。原请求可能在途，继续查询或使用相同键和相同内容恢复，不能立刻换键建单。result 是首次结果快照，读取当前状态应再调用
-        getRideOrder。
+      description: 使用原 Idempotency-Key 及 operationType，按认证主体查询 OperationRecord。SUCCEEDED/REJECTED 是已存结果；PENDING 或 NOT_OBSERVED 都不能证明失败。原请求可能在途，继续查询或使用相同键和相同内容恢复，不能立刻换键建单。result
+        是首次结果快照，读取当前状态应再调用 getRideOrder。 cancelRideOrder 的结果恢复同样适用；SUCCEEDED 的 result 为原 CancellationResult，确定拒绝重放原错误。
       responses:
         '200':
           description: 权威结果；详见操作语义。
@@ -496,6 +494,191 @@ paths:
       x-error-codes:
         - LOCATION_NOT_AUTHORIZED
         - DEPENDENCY_UNAVAILABLE
+  /v1/ride-orders/{rideOrderId}/cancel:
+    post:
+      operationId: cancelRideOrder
+      tags:
+        - ride-service
+      summary: 由乘客或已分配司机取消上车前的订单
+      description: 仅所属乘客可 MATCHING/ASSIGNED/ARRIVED；已分配司机只可 ASSIGNED/ARRIVED。先恢复原键结果，新操作在 S-02 同一事务重验状态、expectedStateVersion
+        和费用同意上限。裁决时间按原规则得出费用超过 maxAcceptedFeeMinor 时拒绝；恰好 120 秒收费。原子提交 Cancellation、终态、邀请/占用、操作记录与 Outbox 后返回 200，不等计费或通知。其他键已取消则
+        ORDER_ALREADY_CANCELLED；未知结果保持原键。详见 cancellation.md。
+      parameters:
+        - $ref: '#/components/parameters/RideOrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: 已提交的权威结果或明确的费用生成状态；不是支付确认。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationResult'
+              example:
+                operationId: op-cancel-01
+                cancellation:
+                  cancellationId: cancel-rebook-01
+                  rideOrderId: order-rebook-old
+                  state: CANCELLED
+                  stateVersion: 3
+                  previousState: ASSIGNED
+                  actorRole: PASSENGER
+                  reason: PLANS_CHANGED
+                  driverId: driver-rebook-01
+                  acceptedAt: '2026-10-27T02:00:10Z'
+                  cancelledAt: '2026-10-27T02:02:10Z'
+                  cancellationRule:
+                    cancellationRuleVersionId: cancel-sh-01
+                    graceSeconds: 120
+                    feeMinor: 500
+                    currency: CNY
+                rideOrder:
+                  rideOrderId: order-rebook-old
+                  quoteId: quote-rebook-old
+                  sourceOrderId: null
+                  cityId: shanghai
+                  state: CANCELLED
+                  stateVersion: 3
+                  assignedDriverId: driver-rebook-01
+                  createdAt: '2026-10-27T02:00:05Z'
+                  matchDeadline: '2026-10-27T02:01:05Z'
+                  acceptedAt: '2026-10-27T02:00:10Z'
+                  serverTime: '2026-10-27T02:02:10Z'
+                  source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      x-error-codes:
+        - FORBIDDEN
+        - ORDER_VERSION_CONFLICT
+        - ORDER_STATE_CONFLICT
+        - ORDER_ALREADY_CANCELLED
+        - CANCELLATION_FEE_CHANGED
+        - IDEMPOTENCY_CONFLICT
+        - OPERATION_PENDING
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRideOrderRequest'
+            example:
+              expectedStateVersion: 2
+              maxAcceptedFeeMinor: 500
+              reason: PLANS_CHANGED
+  /v1/ride-orders/{rideOrderId}/cancellation:
+    get:
+      operationId: getCancellation
+      tags:
+        - ride-service
+      summary: 读取本人参与订单的不可变取消事实
+      description: 仅所属乘客或取消前已分配司机；不能从 ID 推断授权。没有取消事实返回 404，未知取消不能因此推断未执行。返回的事实不授予终态订单的实时位置权限。
+      parameters:
+        - $ref: '#/components/parameters/RideOrderId'
+      responses:
+        '200':
+          description: 已提交的权威结果或明确的费用生成状态；不是支付确认。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cancellation'
+              example:
+                cancellationId: cancel-rebook-01
+                rideOrderId: order-rebook-old
+                state: CANCELLED
+                stateVersion: 3
+                previousState: ASSIGNED
+                actorRole: PASSENGER
+                reason: PLANS_CHANGED
+                driverId: driver-rebook-01
+                acceptedAt: '2026-10-27T02:00:10Z'
+                cancelledAt: '2026-10-27T02:02:10Z'
+                cancellationRule:
+                  cancellationRuleVersionId: cancel-sh-01
+                  graceSeconds: 120
+                  feeMinor: 500
+                  currency: CNY
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      x-error-codes:
+        - NOT_FOUND
+        - FORBIDDEN
+        - DEPENDENCY_UNAVAILABLE
+  /v1/ride-orders/{rideOrderId}/cancellation-fee:
+    get:
+      operationId: getCancellationFee
+      tags:
+        - pricing-service
+      summary: 读取原取消来源的费用生成结果
+      description: 仅该订单乘客。S-04 通过 getCancellationFact 向 S-02 验证身份归属和源事实；不可用报 503，不把未授权或未取消单伪造为费用待生成。只读查询：无 Job/恢复中返回 FEE_PENDING
+        且 bill=null；Bill 存在返回 BILL_READY。零费无需支付；正费用不等于尚未付款，支付状态与支付资格接 S-06 后续契约。不得因旧费用未就绪阻塞新的合法叫车。
+      parameters:
+        - $ref: '#/components/parameters/RideOrderId'
+      responses:
+        '200':
+          description: 已提交的权威结果或明确的费用生成状态；不是支付确认。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationFeeResult'
+              example:
+                rideOrderId: order-rebook-old
+                cancellationId: cancel-rebook-01
+                serverTime: '2026-10-27T02:02:12Z'
+                source: pricing-service
+                status: BILL_READY
+                jobStatus: READY
+                bill:
+                  billId: bill-cancel-01
+                  billVersion: 1
+                  billingJobId: job-cancel-01
+                  rideOrderId: order-rebook-old
+                  kind: CANCELLATION_FEE
+                  sourceId: cancel-rebook-01
+                  amountMinor: 500
+                  currency: CNY
+                  ruleVersionId: cancel-sh-01
+                  createdAt: '2026-10-27T02:02:11Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      x-error-codes:
+        - NOT_FOUND
+        - FORBIDDEN
+        - DEPENDENCY_UNAVAILABLE
 components:
   securitySchemes:
     bearerAuth:
@@ -544,6 +727,7 @@ components:
           - createRideOrder
           - acceptInvitation
           - rejectInvitation
+          - cancelRideOrder
   responses:
     Error400:
       description: 请求未成功；不得伪造业务结果。
@@ -624,7 +808,7 @@ components:
             type: integer
             minimum: 1
     Error503:
-      description: 业务错误；具体 code 见 booking.md。写请求传输异常/提交未知不能推断未执行。
+      description: 业务错误；具体 code 见 booking.md / cancellation.md 及每个操作的 x-error-codes。写请求传输异常/提交未知不能推断未执行。
       content:
         application/json:
           schema:
@@ -976,6 +1160,7 @@ components:
                 - createRideOrder
                 - acceptInvitation
                 - rejectInvitation
+                - cancelRideOrder
             serverTime:
               $ref: '#/components/schemas/UtcTime'
             status:
@@ -986,6 +1171,7 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/RideOrder'
                 - $ref: '#/components/schemas/DecisionResult'
+                - $ref: '#/components/schemas/CancellationResult'
           required:
             - operationId
             - operationType
@@ -1002,6 +1188,7 @@ components:
                 - createRideOrder
                 - acceptInvitation
                 - rejectInvitation
+                - cancelRideOrder
             serverTime:
               $ref: '#/components/schemas/UtcTime'
             status:
@@ -1026,6 +1213,7 @@ components:
                 - createRideOrder
                 - acceptInvitation
                 - rejectInvitation
+                - cancelRideOrder
             serverTime:
               $ref: '#/components/schemas/UtcTime'
             status:
@@ -1038,3 +1226,195 @@ components:
             - operationType
             - serverTime
             - status
+    CancelRideOrderRequest:
+      type: object
+      properties:
+        expectedStateVersion:
+          $ref: '#/components/schemas/Version'
+        maxAcceptedFeeMinor:
+          type: integer
+          enum:
+            - 0
+            - 500
+        reason:
+          type: string
+          enum:
+            - PLANS_CHANGED
+            - UNABLE_TO_PICK_UP
+            - OTHER
+      required:
+        - expectedStateVersion
+        - maxAcceptedFeeMinor
+        - reason
+      additionalProperties: false
+    Cancellation:
+      type: object
+      properties:
+        cancellationId:
+          $ref: '#/components/schemas/Id'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        state:
+          type: string
+          const: CANCELLED
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+        previousState:
+          type: string
+          enum:
+            - MATCHING
+            - ASSIGNED
+            - ARRIVED
+        actorRole:
+          type: string
+          enum:
+            - PASSENGER
+            - DRIVER
+        reason:
+          type: string
+          enum:
+            - PLANS_CHANGED
+            - UNABLE_TO_PICK_UP
+            - OTHER
+        driverId:
+          anyOf:
+            - $ref: '#/components/schemas/Id'
+            - type: 'null'
+        acceptedAt:
+          anyOf:
+            - $ref: '#/components/schemas/UtcTime'
+            - type: 'null'
+        cancelledAt:
+          $ref: '#/components/schemas/UtcTime'
+        cancellationRule:
+          $ref: '#/components/schemas/CancellationRule'
+      required:
+        - cancellationId
+        - rideOrderId
+        - state
+        - stateVersion
+        - previousState
+        - actorRole
+        - reason
+        - driverId
+        - acceptedAt
+        - cancelledAt
+        - cancellationRule
+      additionalProperties: false
+    CancellationResult:
+      type: object
+      properties:
+        operationId:
+          $ref: '#/components/schemas/Id'
+        cancellation:
+          $ref: '#/components/schemas/Cancellation'
+        rideOrder:
+          $ref: '#/components/schemas/RideOrder'
+      required:
+        - operationId
+        - cancellation
+        - rideOrder
+      additionalProperties: false
+    CancellationBill:
+      type: object
+      properties:
+        billId:
+          $ref: '#/components/schemas/Id'
+        billVersion:
+          type: integer
+          const: 1
+        billingJobId:
+          $ref: '#/components/schemas/Id'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        kind:
+          type: string
+          const: CANCELLATION_FEE
+        sourceId:
+          $ref: '#/components/schemas/Id'
+        amountMinor:
+          type: integer
+          enum:
+            - 0
+            - 500
+        currency:
+          type: string
+          const: CNY
+        ruleVersionId:
+          $ref: '#/components/schemas/Id'
+        createdAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - billId
+        - billVersion
+        - billingJobId
+        - rideOrderId
+        - kind
+        - sourceId
+        - amountMinor
+        - currency
+        - ruleVersionId
+        - createdAt
+      additionalProperties: false
+    CancellationFeeResult:
+      oneOf:
+        - type: object
+          properties:
+            rideOrderId:
+              $ref: '#/components/schemas/Id'
+            cancellationId:
+              $ref: '#/components/schemas/Id'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              type: string
+              const: pricing-service
+            status:
+              type: string
+              const: FEE_PENDING
+            jobStatus:
+              type: string
+              enum:
+                - NOT_OBSERVED
+                - PENDING
+                - RETRYING
+                - REQUIRES_REVIEW
+            bill:
+              type: 'null'
+          required:
+            - rideOrderId
+            - cancellationId
+            - serverTime
+            - source
+            - status
+            - jobStatus
+            - bill
+          additionalProperties: false
+        - type: object
+          properties:
+            rideOrderId:
+              $ref: '#/components/schemas/Id'
+            cancellationId:
+              $ref: '#/components/schemas/Id'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              type: string
+              const: pricing-service
+            status:
+              type: string
+              const: BILL_READY
+            jobStatus:
+              type: string
+              const: READY
+            bill:
+              $ref: '#/components/schemas/CancellationBill'
+          required:
+            - rideOrderId
+            - cancellationId
+            - serverTime
+            - source
+            - status
+            - jobStatus
+            - bill
+          additionalProperties: false

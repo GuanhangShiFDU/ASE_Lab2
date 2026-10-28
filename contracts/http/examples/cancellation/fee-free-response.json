@@ -1,0 +1,20 @@
+{
+  "rideOrderId": "order-free-01",
+  "cancellationId": "cancel-free-01",
+  "serverTime": "2026-10-27T02:02:12Z",
+  "source": "pricing-service",
+  "status": "BILL_READY",
+  "jobStatus": "READY",
+  "bill": {
+    "billId": "bill-free-01",
+    "billVersion": 1,
+    "billingJobId": "job-free-01",
+    "rideOrderId": "order-free-01",
+    "kind": "CANCELLATION_FEE",
+    "sourceId": "cancel-free-01",
+    "amountMinor": 0,
+    "currency": "CNY",
+    "ruleVersionId": "cancel-sh-01",
+    "createdAt": "2026-10-27T02:02:11Z"
+  }
+}

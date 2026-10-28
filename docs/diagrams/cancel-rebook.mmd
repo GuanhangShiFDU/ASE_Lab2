@@ -1,0 +1,89 @@
+sequenceDiagram
+    autonumber
+    actor P as 乘客
+    actor D as 已分配司机
+    participant R as S-02 ride-service
+    participant Q as RabbitMQ
+    participant F as S-04 pricing-service
+    participant N as S-07 notification-service
+    participant X as 外部通知适配器
+    participant M as 外部地图适配器
+    Note over P,R: 实线请求 / 虚线响应 / 开放箭头异步事实；调用参数为关键子集<br/>取消不等待费用或通知，所有业务成功均须权威事务提交
+    alt 乘客取消
+        P->>R: getRideOrder(orderId)
+        R-->>P: state / stateVersion / acceptedAt
+        P->>R: cancelRideOrder(orderId, key, expectedStateVersion, maxAcceptedFeeMinor, reason)
+    else 司机取消（必须已分配且上车前）
+        D->>R: getRideOrder(orderId)
+        R-->>D: ASSIGNED 或 ARRIVED / stateVersion
+        D->>R: cancelRideOrder(orderId, key, expectedStateVersion, 0, reason)
+    end
+    Note over P,R: S-02 先按原键恢复；新操作再同事务检查归属、状态版本和服务端时间<br/>费用规则来自下单快照；免费期跨界时不得超过用户同意上限
+    break 已有幂等结果 / 权限、版本、状态或费用上限不符
+        alt 原调用者为乘客
+            R-->>P: 原结果或明确错误
+        else 原调用者为司机
+            R-->>D: 原结果或明确错误
+        end
+        Note over P,R: 超时保留原键；确定冲突读最新状态，经用户确认后才生成新意图
+    end
+    Note over R,F: 原子提交 Cancellation + CANCELLED + 撤销 PENDING<br/>按本单 ID 释放占用 + OperationRecord + Outbox
+    alt 乘客发起成功
+        R-->>P: 200 CancellationResult（费用另查）
+    else 司机发起成功
+        R-->>D: 200 CancellationResult（费用为零仍由 S-04 出记录）
+    end
+    R-)Q: ride.order-cancelled.v1
+    opt 确有 PENDING 邀请变为 REVOKED
+        R-)Q: ride.invitation-closed.v1
+        Note over R,F: S-03 收到关闭事实后 getMatchingOrder，已取消则停止<br/>原 ACCEPTED 邀请不改写为 REVOKED；受邀司机提示撤回
+    end
+    par S-04 独立队列处理费用
+        Q-)F: ride.order-cancelled.v1
+        Note over Q,N: Inbox + 唯一 BillingJob 持久化后 ACK<br/>按 sourceType=CANCELLED、sourceId=cancellationId 去重
+        alt 依据完整，计算成功
+            Note over F,X: 原规则 + 原取消时间 → 0 或 500 分<br/>唯一 Bill + READY + Outbox 原子提交；零费不扣款
+            F-)Q: pricing.bill-created.v1
+        else 计算失败或依据冲突
+            Note over F,X: RETRYING / REQUIRES_REVIEW；恢复原 Job<br/>未有 Bill 就是 FEE_PENDING，不能猜零或回滚取消
+        end
+    and S-07 独立队列通知
+        Q-)N: ride.order-cancelled.v1
+        Note over N,M: 持久任务后 ACK；乘客 + 取消前已分配司机<br/>按 eventId / recipientId / channel 去重
+        N->>X: deliverHint(deliveryId, recipients, orderId)
+        X-->>N: 投递回执 / 失败待原任务重试
+    end
+    opt 费用单已生成（与取消通知独立）
+        Q-)N: pricing.bill-created.v1
+        N->>X: deliverHint(原费用 deliveryId, passenger, billId)
+        X-->>N: 回执 / 原任务重试；不自动扣款
+    end
+    P->>R: getRideOrder(oldOrderId)
+    R-->>P: CANCELLED / 新 stateVersion
+    P->>F: getCancellationFee(oldOrderId)
+    F->>R: getCancellationFact(oldOrderId, trustedPassenger)
+    R-->>F: 已授权取消事实 / 不可用则拒绝猜测
+    break 取消事实不存在、无权访问或依赖不可用
+        F-->>P: 404 / 403 / 503；不猜金额
+    end
+    F-->>P: FEE_PENDING 或 BILL_READY（不是付款状态）
+    Note over P,F: 旧费用保留；是否已付由 S-06 权威查询，见后续支付流程<br/>重新叫车无需等待费用生成、付款或通知成功
+    opt 乘客确认新的出行意图（旧单须 CANCELLED / MATCH_FAILED）
+        P->>F: createQuote(cityId, pickup, destination)
+        F->>M: estimateRoute(pickup, destination)
+        M-->>F: 路径预估 / 依赖失败
+        break 地图失败或结果不可用
+            F-->>P: 503 DEPENDENCY_UNAVAILABLE；不创建报价
+        end
+        F-->>P: 新 quoteId / 规则 / expiresAt
+        P->>R: createRideOrder(newKey, newQuoteId, sourceOrderId=oldOrderId)
+        R->>F: getQuoteSnapshot(newQuoteId, passenger)
+        F-->>R: 不可变报价
+        alt 来源合法、报价有效且全局乘客槽位空闲
+            Note over P,R: 新 rideOrderId / MATCHING + 槽位 + OperationRecord + Outbox<br/>原订单、取消、费用和旧债均保持原关联
+            R-->>P: 201 新订单（后续匹配接第 4.1 节）
+            R-)Q: ride.order-created.v1（sourceOrderId=旧单）
+        else 报价失效 / 来源非法 / 已有活动单
+            R-->>P: 409 明确 code；不创建第二个活动单
+        end
+    end

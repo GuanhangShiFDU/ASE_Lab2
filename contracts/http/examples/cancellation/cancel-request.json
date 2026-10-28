@@ -1,0 +1,5 @@
+{
+  "expectedStateVersion": 2,
+  "maxAcceptedFeeMinor": 500,
+  "reason": "PLANS_CHANGED"
+}

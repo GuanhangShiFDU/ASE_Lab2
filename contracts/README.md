@@ -1,13 +1,14 @@
 # 核心接口与业务事件
 
-#71199990 已补充服务通信与 13 类事件；#71199991 已补充叫车时序图、9 个核心 HTTP 操作及服务间方法目录，基于已合并的 #71199989/90。其余流程与 API 仍待后续卡补齐；不代表已实现服务或完成组内评审。
+#71199990 已补充服务通信与 13 类事件；#71199991 的 9 个叫车核心操作已合入。#71199994 新增 3 个取消/费用查询操作、取消竞争与恢复语义，当前共 12 个核心 HTTP 操作。其余流程与 API 仍待后续卡补齐；不代表已实现服务或完成组内评审。
 
 ## 文件组织
 
 | 路径 | 用途 | 当前状态 |
 | --- | --- | --- |
-| [http/openapi.yaml](http/openapi.yaml) | HTTP/REST 核心接口契约 | OpenAPI 3.1.0，9 个叫车/接单/恢复操作；其他接口待补 |
+| [http/openapi.yaml](http/openapi.yaml) | HTTP/REST 核心接口契约 | OpenAPI 3.1.0，12 个叫车/接单/取消/查询/恢复操作；其他接口待补 |
 | [http/booking.md](http/booking.md) | 叫车流程方法、异常和恢复语义 | 与第 4.1 节时序图一致的设计定义 |
+| [http/cancellation.md](http/cancellation.md) | 取消、重叫、计价恢复和内部方法 | 与第 4.2 节时序图一致；附示例及静态校验器 |
 | [events/README.md](events/README.md) | 业务事件目录、字段和消费语义 | 13 类 v1 事件，附 JSON Schema 与完整示例 |
 
 本轮选择 HTTPS/JSON 请求、短轮询和 RabbitMQ 事实投递，不采用 gRPC/WebSocket，因此无需对应文件。HTTP 交互 C-01～C-18 见设计报告第 3 章；本流程的核心路径、方法、请求/响应、错误体及示例已填入 OpenAPI；#71199996 继续补齐其余流程、内部 HTTP 绑定及辅助接口，保留已确定的 operationId 或同步改图。事件的 JSON Schema 与示例在 `events/` 中，可与 HTTP 契约分开评审。

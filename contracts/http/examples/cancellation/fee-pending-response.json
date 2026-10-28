@@ -1,0 +1,9 @@
+{
+  "rideOrderId": "order-rebook-old",
+  "cancellationId": "cancel-rebook-01",
+  "serverTime": "2026-10-27T02:02:10Z",
+  "source": "pricing-service",
+  "status": "FEE_PENDING",
+  "jobStatus": "RETRYING",
+  "bill": null
+}
