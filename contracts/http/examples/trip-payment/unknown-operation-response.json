@@ -1,0 +1,7 @@
+{
+  "code": "OPERATION_PENDING",
+  "message": "保持原键查询或恢复，不要再次付款",
+  "requestId": "req-pay-03",
+  "outcome": "UNKNOWN",
+  "retryable": true
+}

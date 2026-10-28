@@ -1,0 +1,80 @@
+sequenceDiagram
+    autonumber
+    actor U as 本人客户端
+    participant R as S-02 ride-service
+    participant F as S-04 pricing-service
+    participant S as S-06 payment-service
+    participant C as 外部支付适配器
+    participant Q as RabbitMQ
+    participant J as 授权核验与恢复作业
+    Note over U,F: 实线请求 / 虚线响应 / 开放箭头异步事实<br/>以下为互相独立的恢复场景，不是一个尝试必须经过的顺序
+    rect rgb(242,248,243)
+        Note over U,F: 场景 A：完成时计量未齐；费用待确定
+        U->>F: getTripBill(tripId)
+        F-->>U: FEE_PENDING / bill=null（不等于零）
+        J->>R: supplyTripMeasurement(tripId, evidenceRef, operationId)
+        Note over R,S: 核验来源/结束时间/归属，只补首份完整计量<br/>冻结 measurement + Outbox；冲突转人工，不能改已有 Bill
+        R-->>J: 已冻结 measurement / 原幂等结果
+        R-)Q: ride.trip-measurement-ready.v1
+        Q-)F: ride.trip-measurement-ready.v1
+        F->>R: getTripFact(tripId, trustedSubject)
+        R-->>F: 已完成事实 / 首份核验计量 / 原规则
+        Note over R,S: 同一 Job 恢复；补齐先到也不能忽略<br/>唯一 Bill + READY + Outbox，重复事件不重复出账
+        F-)Q: pricing.bill-created.v1
+        opt 长时间漏消息的补漏作业
+            F->>R: listCompletedTripFacts(cursor, limit)
+            R-->>F: 稳定提交游标分页 / nextCursor
+            Note over R,S: 持久 Job 后推进游标；已完成 Job/Bill 不重复建立
+        end
+    end
+    rect rgb(244,246,252)
+        Note over U,S: 场景 B：创建支付响应丢失或渠道结果未知
+        U->>S: getOperationResult(originalKey, createPaymentAttempt)
+        alt 已提交创建
+            S-->>U: SUCCEEDED / 原 202 CREATED 快照
+            U->>S: getPaymentAttempt(attemptId)
+            S-->>U: PROCESSING 或 UNKNOWN
+        else 未观察到原操作 / 仍在处理
+            S-->>U: NOT_OBSERVED 或 PENDING（不是失败）
+            U->>S: createPaymentAttempt(originalKey, originalBody)
+            S-->>U: 原结果 / OPERATION_PENDING
+        end
+        Note over F,C: 原发送任务与 channelRequestId 持久保存<br/>崩溃恢复不换号；不因超时释放 billId 未决槽位
+        S->>C: queryCharge(originalChannelRequestId)
+        alt 超时 / 普通 NOT_FOUND / 仍处理中
+            C-->>S: UNKNOWN 或 PROCESSING
+            Note over S,J: 退避后查原请求；预算耗尽持久隔离/对账<br/>仍保持未决，不能变成 FAILED_FINAL 或再次扣款
+        else 核验最终成功
+            C-->>S: 成功 / 原请求号 / 交易号 / 金额币种
+            S->>S: applyVerifiedPaymentFact(verifiedFact)
+            S-)Q: payment.receipt-confirmed.v1
+            Note over F,Q: Receipt 和 SUCCEEDED 同事务；查询与回调共用唯一约束
+        end
+        U->>S: getBillPaymentState(billId)
+        S-->>U: PAYMENT_PENDING / PAID；不可用则 503，显示 UNKNOWN
+    end
+    rect rgb(253,247,239)
+        Note over U,S: 场景 C：渠道明确不可逆失败，用户重新确认
+        C->>S: handlePaymentCallback(rawBody, signedHeaders)
+        Note over F,Q: 核验身份/商户/请求号/金额/币种/终态证据<br/>仅不可逆失败可置 FAILED_FINAL + 释放槽位，同事务
+        S->>S: applyVerifiedPaymentFact(verifiedFinalFailure)
+        S-->>C: 持久处理后 ACK
+        U->>S: getPaymentAttempt(failedAttemptId)
+        S-->>U: FAILED_FINAL / 原失败原因
+        U->>S: createPaymentAttempt(newKey, sameBill, confirmedMethod)
+        Note over U,S: 本人确认的新意图；事务内重新检查已付/未决/审计冻结<br/>不是自动换键重试旧的未知付款
+        S-->>U: 202 新尝试 / 409 已付、未决或待核查
+    end
+    rect rgb(253,242,242)
+        Note over F,J: 场景 D：重复、伪造、乱序及矛盾回调
+        C->>S: handlePaymentCallback(rawBody, signedHeaders)
+        alt 验签不通过或关联不符
+            S-->>C: 拒绝；审计，不写 Receipt
+        else 重复且一致的已处理事实
+            S->>S: applyVerifiedPaymentFact(verifiedFact)
+            S-->>C: 幂等 ACK；不重复收款
+        else 迟到失败或可信终态矛盾
+            Note over F,J: 迟到失败不能覆盖 Receipt/SUCCEEDED<br/>矛盾事实持久隔离，冻结新付款并人工核查
+            S-->>C: 按渠道约定确认已持久接收，不表示再次收款
+        end
+    end

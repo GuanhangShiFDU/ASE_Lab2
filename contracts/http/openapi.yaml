@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: ASE Lab 2 Ride-hailing API
-  version: 0.2.0-cancellation-draft
-  description: '#71199991 的 9 个报价/叫车/接单/恢复操作，加上 #71199994 的 3 个取消/事实/费用查询操作。非已部署服务。行程支付及其余辅助接口由 #71199995/96 完善。'
+  version: 0.3.0-trip-payment-draft
+  description: '#71199991/94 的 12 个操作，加上 #71199995 的 8 个接驾、行程、费用和支付操作。仅设计契约；其余辅助接口及内部/渠道 HTTP 绑定由 #71199996 汇总。'
 servers:
   - url: https://api.example.invalid
     description: 虚构地址，仅为设计示例
@@ -12,6 +12,7 @@ tags:
   - name: pricing-service
   - name: ride-service
   - name: location-service
+  - name: payment-service
 paths:
   /v1/quotes:
     post:
@@ -403,7 +404,7 @@ paths:
         - ride-service
       summary: 恢复本人未知写请求的原结果
       description: 使用原 Idempotency-Key 及 operationType，按认证主体查询 OperationRecord。SUCCEEDED/REJECTED 是已存结果；PENDING 或 NOT_OBSERVED 都不能证明失败。原请求可能在途，继续查询或使用相同键和相同内容恢复，不能立刻换键建单。result
-        是首次结果快照，读取当前状态应再调用 getRideOrder。 cancelRideOrder 的结果恢复同样适用；SUCCEEDED 的 result 为原 CancellationResult，确定拒绝重放原错误。
+        是首次结果快照，读取当前状态应再调用 getRideOrder。 cancelRideOrder 的结果恢复同样适用；SUCCEEDED 的 result 为原 CancellationResult，确定拒绝重放原错误。 reportArrival/confirmBoardingAndStartTrip/completeTrip 路由 S-02；createPaymentAttempt 路由 S-06，必须按可信 operationType 选所有者。其 SUCCEEDED 只证明尝试建立，result 是原 202 PaymentAttemptResult；付款最终结果另查 getPaymentAttempt/getBillPaymentState。
       responses:
         '200':
           description: 权威结果；详见操作语义。
@@ -679,6 +680,494 @@ paths:
         - NOT_FOUND
         - FORBIDDEN
         - DEPENDENCY_UNAVAILABLE
+  /v1/ride-orders/{rideOrderId}/arrive:
+    post:
+      operationId: reportArrival
+      tags:
+        - ride-service
+      summary: 已分配司机报告到达
+      description: 仅本单已分配司机。原键结果优先；新操作核验 expectedStateVersion 和 ASSIGNED，原子提交 ARRIVED、arrivedAt、OperationRecord、Outbox。GPS
+        接近不能替代司机确认。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArrivalResult'
+              example:
+                rideOrderId: order-trip-01
+                driverId: driver-trip-01
+                state: ARRIVED
+                stateVersion: 3
+                arrivedAt: '2026-10-28T02:03:00Z'
+                serverTime: '2026-10-28T02:03:00Z'
+                source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: rideOrderId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripVersionRequest'
+            example:
+              expectedStateVersion: 2
+      x-error-codes:
+        - ORDER_VERSION_CONFLICT
+        - ORDER_STATE_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - OPERATION_PENDING
+  /v1/ride-orders/{rideOrderId}/start-trip:
+    post:
+      operationId: confirmBoardingAndStartTrip
+      tags:
+        - ride-service
+      summary: 确认上车并原子开始行程
+      description: 仅已分配司机。boardingConfirmed 必须为 true；ARRIVED + 版本匹配，在一次 S-02 事务中创建唯一 Trip、保存上车/开始时间、更新 IN_TRIP、OperationRecord
+        和 Outbox。与取消串行裁决，不能留下上车成功但仍可普通取消的间隙。原键重放首次快照；随后 getTrip 读当前状态。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartedTripResult'
+              example:
+                trip:
+                  tripId: trip-flow-01
+                  rideOrderId: order-trip-01
+                  passengerId: passenger-trip-01
+                  driverId: driver-trip-01
+                  fareRuleVersionId: fare-trip-01
+                  state: IN_PROGRESS
+                  boardingConfirmedAt: '2026-10-28T02:03:30Z'
+                  startedAt: '2026-10-28T02:03:30Z'
+                  endedAt: null
+                  measurement: null
+                rideOrderState: IN_TRIP
+                stateVersion: 4
+                serverTime: '2026-10-28T02:03:30Z'
+                source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: rideOrderId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+            example:
+              expectedStateVersion: 3
+              boardingConfirmed: true
+      x-error-codes:
+        - ORDER_VERSION_CONFLICT
+        - ORDER_STATE_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - OPERATION_PENDING
+  /v1/trips/{tripId}/complete:
+    post:
+      operationId: completeTrip
+      tags:
+        - ride-service
+      summary: 结束行程并释放本单占用
+      description: 仅所属司机。IN_TRIP + expectedStateVersion；服务器记录 endedAt，读取已核验计量（未齐可 null）。同事务完成 Trip/订单、按旧单 ID
+        条件释放司机/乘客槽位、保存操作/Outbox。成功不等待计费或收款，不允许客户端指定费用或任意计量。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompletedTripResult'
+              example:
+                trip:
+                  tripId: trip-flow-01
+                  rideOrderId: order-trip-01
+                  passengerId: passenger-trip-01
+                  driverId: driver-trip-01
+                  fareRuleVersionId: fare-trip-01
+                  state: COMPLETED
+                  boardingConfirmedAt: '2026-10-28T02:03:30Z'
+                  startedAt: '2026-10-28T02:03:30Z'
+                  endedAt: '2026-10-28T02:15:30Z'
+                  measurement: null
+                rideOrderState: COMPLETED
+                stateVersion: 5
+                serverTime: '2026-10-28T02:15:30Z'
+                source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripVersionRequest'
+            example:
+              expectedStateVersion: 4
+      x-error-codes:
+        - ORDER_VERSION_CONFLICT
+        - ORDER_STATE_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - OPERATION_PENDING
+  /v1/trips/{tripId}:
+    get:
+      operationId: getTrip
+      tags:
+        - ride-service
+      summary: 查询本人行程及已核验计量
+      description: 仅所属乘客/司机。S-02 权威读取；measurement=null 是缺依据，不是零距离。费用与付款分别查询 S-04/S-06。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripResult'
+              example:
+                trip:
+                  tripId: trip-flow-01
+                  rideOrderId: order-trip-01
+                  passengerId: passenger-trip-01
+                  driverId: driver-trip-01
+                  fareRuleVersionId: fare-trip-01
+                  state: COMPLETED
+                  boardingConfirmedAt: '2026-10-28T02:03:30Z'
+                  startedAt: '2026-10-28T02:03:30Z'
+                  endedAt: '2026-10-28T02:15:30Z'
+                  measurement:
+                    actualDistanceMeters: 8000
+                    durationSeconds: 720
+                    measurementVersion: 1
+                    meteringSource: verified-meter-demo
+                rideOrderState: COMPLETED
+                stateVersion: 5
+                serverTime: '2026-10-28T02:15:35Z'
+                source: ride-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+      x-error-codes:
+        - DEPENDENCY_UNAVAILABLE
+  /v1/trips/{tripId}/bill:
+    get:
+      operationId: getTripBill
+      tags:
+        - pricing-service
+      summary: 查询已结束行程的费用单
+      description: 仅所属乘客。依据 S-02 getTripFact 核验归属/完成状态，已有可信本地事实可直接授权。未结束返回 409 TRIP_NOT_COMPLETED；缺事实或依赖不明返回
+        503。已确认完成但无 Bill 返回 FEE_PENDING/bill=null；查询不生成费用或扣款。BILL_READY 不是付款成功，另查 getBillPaymentState。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripBillResult'
+              example:
+                tripId: trip-flow-01
+                rideOrderId: order-trip-01
+                status: BILL_READY
+                bill:
+                  billId: bill-trip-01
+                  billVersion: 1
+                  billingJobId: billing-trip-01
+                  rideOrderId: order-trip-01
+                  passengerId: passenger-trip-01
+                  kind: TRIP_FARE
+                  sourceId: trip-flow-01
+                  amountMinor: 2500
+                  currency: CNY
+                  ruleVersionId: fare-trip-01
+                  fareDetails:
+                    measurement:
+                      actualDistanceMeters: 8000
+                      durationSeconds: 720
+                      measurementVersion: 1
+                      meteringSource: verified-meter-demo
+                    baseMinor: 900
+                    ratePerMeterMinor: '0.11'
+                    ratePerSecondMinor: '1'
+                    minimumMinor: 1000
+                    rounding: HALF_UP
+                  createdAt: '2026-10-28T02:15:36Z'
+                serverTime: '2026-10-28T02:15:36Z'
+                source: pricing-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+      x-error-codes:
+        - TRIP_NOT_COMPLETED
+        - DEPENDENCY_UNAVAILABLE
+  /v1/payment-attempts:
+    post:
+      operationId: createPaymentAttempt
+      tags:
+        - payment-service
+      summary: 为确定的费用单建立一次支付尝试
+      description: 仅费用单所属乘客；确认 Bill 后提交其版本和本人支付方式引用，不接收客户端金额/身份。S-06 在事务外 getBillSnapshot 并核验不可变快照及支付方式归属；事务内检查
+        Receipt 和 billId 唯一未决槽位，保存 CREATED、OperationRecord、持久发送任务、Outbox 后返回 202。worker 在事务外调用渠道。原键恢复原 202；异键未决返回
+        PAYMENT_IN_PROGRESS，已收款 BILL_ALREADY_PAID，零额 NO_PAYMENT_REQUIRED，均不新扣款。
+      responses:
+        '202':
+          description: 已提交的权威结果；202 仅表示支付尝试已受理，不表示已付款。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttemptResult'
+              example:
+                attempt:
+                  paymentAttemptId: attempt-trip-01
+                  billId: bill-trip-01
+                  billVersion: 1
+                  rideOrderId: order-trip-01
+                  passengerId: passenger-trip-01
+                  amountMinor: 2500
+                  currency: CNY
+                  status: CREATED
+                  statusVersion: 1
+                  requestedAt: '2026-10-28T02:16:00Z'
+                  lastCheckedAt: null
+                  reasonCode: null
+                  receipt: null
+                serverTime: '2026-10-28T02:16:00Z'
+                source: payment-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentAttemptRequest'
+            example:
+              billId: bill-trip-01
+              billVersion: 1
+              paymentMethodRef: method-owned-01
+      x-error-codes:
+        - BILL_VERSION_CONFLICT
+        - PAYMENT_IN_PROGRESS
+        - BILL_ALREADY_PAID
+        - NO_PAYMENT_REQUIRED
+        - PAYMENT_METHOD_INVALID
+        - PAYMENT_REVIEW_REQUIRED
+        - IDEMPOTENCY_CONFLICT
+        - DEPENDENCY_UNAVAILABLE
+        - OPERATION_PENDING
+  /v1/payment-attempts/{paymentAttemptId}:
+    get:
+      operationId: getPaymentAttempt
+      tags:
+        - payment-service
+      summary: 查询本人支付尝试及最终收款凭据
+      description: 仅所属乘客。读取 S-06 权威状态，不创建新扣款；UNKNOWN/PROCESSING 须等待恢复作业 queryCharge，不能换键付款。SUCCEEDED 必须附本次 Receipt；FAILED_FINAL
+        仅已核验不可逆渠道失败。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttemptResult'
+              example:
+                attempt:
+                  paymentAttemptId: attempt-trip-01
+                  billId: bill-trip-01
+                  billVersion: 1
+                  rideOrderId: order-trip-01
+                  passengerId: passenger-trip-01
+                  amountMinor: 2500
+                  currency: CNY
+                  status: UNKNOWN
+                  statusVersion: 2
+                  requestedAt: '2026-10-28T02:16:00Z'
+                  lastCheckedAt: '2026-10-28T02:16:03Z'
+                  reasonCode: CHANNEL_TIMEOUT
+                  receipt: null
+                serverTime: '2026-10-28T02:16:03Z'
+                source: payment-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: paymentAttemptId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+      x-error-codes:
+        - DEPENDENCY_UNAVAILABLE
+  /v1/bills/{billId}/payment-state:
+    get:
+      operationId: getBillPaymentState
+      tags:
+        - payment-service
+      summary: 查询一张费用单的权威支付结果
+      description: 仅所属乘客；S-04 可使用受限内部身份查询可信乘客上下文（不得信任客户端自填 header）。对同一 billId 一致性读取 Receipt/未决槽位，Receipt 优先。原
+        Bill 可为行程费或取消费，首次须 getBillSnapshot 验证费用单，不存在返回 404。零额 NO_PAYMENT_REQUIRED；正额无 Receipt/未决才 UNPAID。无法确认返回
+        503，调用方显示 UNKNOWN，不能回退 UNPAID。
+      responses:
+        '200':
+          description: 权威查询或已提交的业务结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPaymentState'
+              example:
+                billId: bill-trip-01
+                billVersion: 1
+                amountMinor: 2500
+                currency: CNY
+                status: PAID
+                currentAttempt: null
+                receipt:
+                  receiptId: receipt-trip-01
+                  billId: bill-trip-01
+                  paymentAttemptId: attempt-trip-01
+                  amountMinor: 2500
+                  currency: CNY
+                  paidAt: '2026-10-28T02:16:02Z'
+                serverTime: '2026-10-28T02:16:10Z'
+                source: payment-service
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '503':
+          $ref: '#/components/responses/Error503'
+      parameters:
+        - name: billId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+      x-error-codes:
+        - DEPENDENCY_UNAVAILABLE
 components:
   securitySchemes:
     bearerAuth:
@@ -728,6 +1217,10 @@ components:
           - acceptInvitation
           - rejectInvitation
           - cancelRideOrder
+          - reportArrival
+          - confirmBoardingAndStartTrip
+          - completeTrip
+          - createPaymentAttempt
   responses:
     Error400:
       description: 请求未成功；不得伪造业务结果。
@@ -808,7 +1301,7 @@ components:
             type: integer
             minimum: 1
     Error503:
-      description: 业务错误；具体 code 见 booking.md / cancellation.md 及每个操作的 x-error-codes。写请求传输异常/提交未知不能推断未执行。
+      description: 业务错误；具体 code 见 booking.md / cancellation.md / trip-payment.md 及每个操作的 x-error-codes。写请求传输异常/提交未知不能推断未执行。
       content:
         application/json:
           schema:
@@ -1161,6 +1654,10 @@ components:
                 - acceptInvitation
                 - rejectInvitation
                 - cancelRideOrder
+                - reportArrival
+                - confirmBoardingAndStartTrip
+                - completeTrip
+                - createPaymentAttempt
             serverTime:
               $ref: '#/components/schemas/UtcTime'
             status:
@@ -1172,6 +1669,9 @@ components:
                 - $ref: '#/components/schemas/RideOrder'
                 - $ref: '#/components/schemas/DecisionResult'
                 - $ref: '#/components/schemas/CancellationResult'
+                - $ref: '#/components/schemas/ArrivalResult'
+                - $ref: '#/components/schemas/TripResult'
+                - $ref: '#/components/schemas/PaymentAttemptResult'
           required:
             - operationId
             - operationType
@@ -1189,6 +1689,10 @@ components:
                 - acceptInvitation
                 - rejectInvitation
                 - cancelRideOrder
+                - reportArrival
+                - confirmBoardingAndStartTrip
+                - completeTrip
+                - createPaymentAttempt
             serverTime:
               $ref: '#/components/schemas/UtcTime'
             status:
@@ -1214,6 +1718,10 @@ components:
                 - acceptInvitation
                 - rejectInvitation
                 - cancelRideOrder
+                - reportArrival
+                - confirmBoardingAndStartTrip
+                - completeTrip
+                - createPaymentAttempt
             serverTime:
               $ref: '#/components/schemas/UtcTime'
             status:
@@ -1418,3 +1926,562 @@ components:
             - jobStatus
             - bill
           additionalProperties: false
+
+    TripVersionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedStateVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+        - expectedStateVersion
+    StartTripRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedStateVersion:
+          $ref: '#/components/schemas/Version'
+        boardingConfirmed:
+          const: true
+      required:
+        - expectedStateVersion
+        - boardingConfirmed
+    TripMeasurement:
+      type: object
+      additionalProperties: false
+      properties:
+        actualDistanceMeters:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        durationSeconds:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        measurementVersion:
+          $ref: '#/components/schemas/Version'
+        meteringSource:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+        - actualDistanceMeters
+        - durationSeconds
+        - measurementVersion
+        - meteringSource
+    ArrivalResult:
+      type: object
+      additionalProperties: false
+      properties:
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        driverId:
+          $ref: '#/components/schemas/Id'
+        state:
+          const: ARRIVED
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+        arrivedAt:
+          $ref: '#/components/schemas/UtcTime'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+        source:
+          const: ride-service
+      required:
+        - rideOrderId
+        - driverId
+        - state
+        - stateVersion
+        - arrivedAt
+        - serverTime
+        - source
+    Trip:
+      type: object
+      additionalProperties: false
+      properties:
+        tripId:
+          $ref: '#/components/schemas/Id'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        passengerId:
+          $ref: '#/components/schemas/Id'
+        driverId:
+          $ref: '#/components/schemas/Id'
+        fareRuleVersionId:
+          $ref: '#/components/schemas/Id'
+        state:
+          enum:
+            - IN_PROGRESS
+            - COMPLETED
+        boardingConfirmedAt:
+          $ref: '#/components/schemas/UtcTime'
+        startedAt:
+          $ref: '#/components/schemas/UtcTime'
+        endedAt:
+          oneOf:
+            - $ref: '#/components/schemas/UtcTime'
+            - type: 'null'
+        measurement:
+          oneOf:
+            - $ref: '#/components/schemas/TripMeasurement'
+            - type: 'null'
+      required:
+        - tripId
+        - rideOrderId
+        - passengerId
+        - driverId
+        - fareRuleVersionId
+        - state
+        - boardingConfirmedAt
+        - startedAt
+        - endedAt
+        - measurement
+      allOf:
+        - if:
+            properties:
+              state:
+                const: IN_PROGRESS
+          then:
+            properties:
+              endedAt:
+                type: 'null'
+              measurement:
+                type: 'null'
+          else:
+            properties:
+              endedAt:
+                $ref: '#/components/schemas/UtcTime'
+    TripResult:
+      type: object
+      additionalProperties: false
+      properties:
+        trip:
+          $ref: '#/components/schemas/Trip'
+        rideOrderState:
+          enum:
+            - IN_TRIP
+            - COMPLETED
+        stateVersion:
+          $ref: '#/components/schemas/Version'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+        source:
+          const: ride-service
+      required:
+        - trip
+        - rideOrderState
+        - stateVersion
+        - serverTime
+        - source
+      allOf:
+        - if:
+            properties:
+              rideOrderState:
+                const: IN_TRIP
+          then:
+            properties:
+              trip:
+                properties:
+                  state:
+                    const: IN_PROGRESS
+          else:
+            properties:
+              trip:
+                properties:
+                  state:
+                    const: COMPLETED
+    StartedTripResult:
+      allOf:
+        - $ref: '#/components/schemas/TripResult'
+        - properties:
+            rideOrderState:
+              const: IN_TRIP
+    CompletedTripResult:
+      allOf:
+        - $ref: '#/components/schemas/TripResult'
+        - properties:
+            rideOrderState:
+              const: COMPLETED
+    TripFareBreakdown:
+      type: object
+      additionalProperties: false
+      properties:
+        measurement:
+          $ref: '#/components/schemas/TripMeasurement'
+        baseMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        ratePerMeterMinor:
+          type: string
+          pattern: ^\d+(\.\d{1,6})?$
+        ratePerSecondMinor:
+          type: string
+          pattern: ^\d+(\.\d{1,6})?$
+        minimumMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        rounding:
+          const: HALF_UP
+      required:
+        - measurement
+        - baseMinor
+        - ratePerMeterMinor
+        - ratePerSecondMinor
+        - minimumMinor
+        - rounding
+    TripBill:
+      type: object
+      additionalProperties: false
+      properties:
+        billId:
+          $ref: '#/components/schemas/Id'
+        billVersion:
+          $ref: '#/components/schemas/Version'
+        billingJobId:
+          $ref: '#/components/schemas/Id'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        passengerId:
+          $ref: '#/components/schemas/Id'
+        kind:
+          const: TRIP_FARE
+        sourceId:
+          $ref: '#/components/schemas/Id'
+        amountMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        currency:
+          const: CNY
+        ruleVersionId:
+          $ref: '#/components/schemas/Id'
+        fareDetails:
+          $ref: '#/components/schemas/TripFareBreakdown'
+        createdAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - billId
+        - billVersion
+        - billingJobId
+        - rideOrderId
+        - passengerId
+        - kind
+        - sourceId
+        - amountMinor
+        - currency
+        - ruleVersionId
+        - fareDetails
+        - createdAt
+    TripBillResult:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          properties:
+            tripId:
+              $ref: '#/components/schemas/Id'
+            rideOrderId:
+              $ref: '#/components/schemas/Id'
+            status:
+              const: FEE_PENDING
+            bill:
+              type: 'null'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              const: pricing-service
+          required:
+            - tripId
+            - rideOrderId
+            - status
+            - bill
+            - serverTime
+            - source
+        - type: object
+          additionalProperties: false
+          properties:
+            tripId:
+              $ref: '#/components/schemas/Id'
+            rideOrderId:
+              $ref: '#/components/schemas/Id'
+            status:
+              const: BILL_READY
+            bill:
+              $ref: '#/components/schemas/TripBill'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              const: pricing-service
+          required:
+            - tripId
+            - rideOrderId
+            - status
+            - bill
+            - serverTime
+            - source
+    CreatePaymentAttemptRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        billId:
+          $ref: '#/components/schemas/Id'
+        billVersion:
+          $ref: '#/components/schemas/Version'
+        paymentMethodRef:
+          $ref: '#/components/schemas/Id'
+      required:
+        - billId
+        - billVersion
+        - paymentMethodRef
+    PaymentReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        receiptId:
+          $ref: '#/components/schemas/Id'
+        billId:
+          $ref: '#/components/schemas/Id'
+        paymentAttemptId:
+          $ref: '#/components/schemas/Id'
+        amountMinor:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        currency:
+          const: CNY
+        paidAt:
+          $ref: '#/components/schemas/UtcTime'
+      required:
+        - receiptId
+        - billId
+        - paymentAttemptId
+        - amountMinor
+        - currency
+        - paidAt
+    PaymentAttempt:
+      type: object
+      additionalProperties: false
+      properties:
+        paymentAttemptId:
+          $ref: '#/components/schemas/Id'
+        billId:
+          $ref: '#/components/schemas/Id'
+        billVersion:
+          $ref: '#/components/schemas/Version'
+        rideOrderId:
+          $ref: '#/components/schemas/Id'
+        passengerId:
+          $ref: '#/components/schemas/Id'
+        amountMinor:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        currency:
+          const: CNY
+        status:
+          enum:
+            - CREATED
+            - PROCESSING
+            - UNKNOWN
+            - SUCCEEDED
+            - FAILED_FINAL
+        statusVersion:
+          $ref: '#/components/schemas/Version'
+        requestedAt:
+          $ref: '#/components/schemas/UtcTime'
+        lastCheckedAt:
+          oneOf:
+            - $ref: '#/components/schemas/UtcTime'
+            - type: 'null'
+        reasonCode:
+          oneOf:
+            - type: string
+              minLength: 1
+            - type: 'null'
+        receipt:
+          oneOf:
+            - $ref: '#/components/schemas/PaymentReceipt'
+            - type: 'null'
+      required:
+        - paymentAttemptId
+        - billId
+        - billVersion
+        - rideOrderId
+        - passengerId
+        - amountMinor
+        - currency
+        - status
+        - statusVersion
+        - requestedAt
+        - lastCheckedAt
+        - reasonCode
+        - receipt
+      allOf:
+        - if:
+            properties:
+              status:
+                const: SUCCEEDED
+          then:
+            properties:
+              receipt:
+                $ref: '#/components/schemas/PaymentReceipt'
+              reasonCode:
+                type: 'null'
+          else:
+            properties:
+              receipt:
+                type: 'null'
+    PaymentAttemptResult:
+      type: object
+      additionalProperties: false
+      properties:
+        attempt:
+          $ref: '#/components/schemas/PaymentAttempt'
+        serverTime:
+          $ref: '#/components/schemas/UtcTime'
+        source:
+          const: payment-service
+      required:
+        - attempt
+        - serverTime
+        - source
+    BillPaymentState:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          properties:
+            billId:
+              $ref: '#/components/schemas/Id'
+            billVersion:
+              $ref: '#/components/schemas/Version'
+            amountMinor:
+              type: integer
+              minimum: 1
+              maximum: 9007199254740991
+            currency:
+              const: CNY
+            status:
+              const: UNPAID
+            currentAttempt:
+              type: 'null'
+            receipt:
+              type: 'null'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              const: payment-service
+          required:
+            - billId
+            - billVersion
+            - amountMinor
+            - currency
+            - status
+            - currentAttempt
+            - receipt
+            - serverTime
+            - source
+        - type: object
+          additionalProperties: false
+          properties:
+            billId:
+              $ref: '#/components/schemas/Id'
+            billVersion:
+              $ref: '#/components/schemas/Version'
+            amountMinor:
+              type: integer
+              minimum: 1
+              maximum: 9007199254740991
+            currency:
+              const: CNY
+            status:
+              const: PAYMENT_PENDING
+            currentAttempt:
+              allOf:
+                - $ref: '#/components/schemas/PaymentAttempt'
+                - properties:
+                    status:
+                      enum:
+                        - CREATED
+                        - PROCESSING
+                        - UNKNOWN
+            receipt:
+              type: 'null'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              const: payment-service
+          required:
+            - billId
+            - billVersion
+            - amountMinor
+            - currency
+            - status
+            - currentAttempt
+            - receipt
+            - serverTime
+            - source
+        - type: object
+          additionalProperties: false
+          properties:
+            billId:
+              $ref: '#/components/schemas/Id'
+            billVersion:
+              $ref: '#/components/schemas/Version'
+            amountMinor:
+              type: integer
+              minimum: 1
+              maximum: 9007199254740991
+            currency:
+              const: CNY
+            status:
+              const: PAID
+            currentAttempt:
+              type: 'null'
+            receipt:
+              $ref: '#/components/schemas/PaymentReceipt'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              const: payment-service
+          required:
+            - billId
+            - billVersion
+            - amountMinor
+            - currency
+            - status
+            - currentAttempt
+            - receipt
+            - serverTime
+            - source
+        - type: object
+          additionalProperties: false
+          properties:
+            billId:
+              $ref: '#/components/schemas/Id'
+            billVersion:
+              $ref: '#/components/schemas/Version'
+            amountMinor:
+              const: 0
+            currency:
+              const: CNY
+            status:
+              const: NO_PAYMENT_REQUIRED
+            currentAttempt:
+              type: 'null'
+            receipt:
+              type: 'null'
+            serverTime:
+              $ref: '#/components/schemas/UtcTime'
+            source:
+              const: payment-service
+          required:
+            - billId
+            - billVersion
+            - amountMinor
+            - currency
+            - status
+            - currentAttempt
+            - receipt
+            - serverTime
+            - source

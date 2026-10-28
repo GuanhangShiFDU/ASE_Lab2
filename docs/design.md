@@ -1,6 +1,6 @@
 # 网约车平台微服务架构设计
 
-> 状态：#71199988 领域规则、#71199989 服务/数据边界、#71199990 通信/事件已合入基线；#71199991 客户端与叫车流程已合入基线；#71199994 取消/重叫流程、竞争恢复和核心调用草案已编写。4.3、其余 API、整体架构和真实交叉评审仍待完成。合并与设计推演不等同于运行测试通过或全部组员确认。
+> 状态：#71199988 领域规则、#71199989 服务/数据边界、#71199990 通信/事件已合入基线；#71199991 客户端与叫车流程已合入基线；#71199994 取消/重叫流程已合入基线；#71199995 接驾/行程/支付、异常恢复及核心调用草案已编写。其余 API 汇总、整体架构和真实交叉评审仍待完成。合并与设计推演不等同于运行测试通过或全部组员确认。
 
 依据：[Lab 2 作业要求](https://openmsg.yuque.com/openmsg/gp3cfs/eyuag71f933gx041)（核对日期：2026-10-26）。领域分析任务：[#71199988 Domain Analysis & Business Rules](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199988)，负责人：史冠航。
 
@@ -605,19 +605,76 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 
 ### 4.3 接驾、上车与支付
 
-- 正常过程：司机到达上车点 → 确认并上报乘客已上车 → 开始行程 → 结束行程 → 生成费用 → 完成支付。
-- 主要异常分支：至少讨论支付失败，并说明状态、重试及通知结果。
-- 待补充：时序图、业务规则、各服务处理职责、结果及对应契约。
-- 时序图源建议：`docs/diagrams/pickup-trip-payment.mmd`，尚未创建。
+本节（#71199995，李全昊）接续已分配订单，覆盖司机到达、确认上车并开始、结束、计费和支付。规则沿用 BR-01/05/06 及 S-02/S-04/S-06 的数据归属；费用公式、计量核验方法和渠道适配保证是本组设计细化，待交叉评审。没有实现或运行业务服务。
 
-每张时序图需列出客户端、参与的微服务及外部系统，区分请求、响应和消息的先后顺序以及同步/异步交互。箭头标注具体接口、方法或事件名，并与契约逐项一致。
+#### 4.3.1 主流程与关键标识
+
+![接驾、行程与支付主流程](diagrams/pickup-trip-payment.png)
+
+[Mermaid 源](diagrams/pickup-trip-payment.mmd) · [可放大 SVG](diagrams/pickup-trip-payment.svg)。实线实心箭头是同步请求、虚线是响应、开放箭头是经 RabbitMQ 投递的异步事实；Note 表示本地事务/约束。通知适配器只负责投递，支付适配器代表尚未选定的外部渠道；不把渠道示例当成已经集成。
+
+| 阶段 | 所有者、方法与合法迁移 | 成功结果及事务边界 |
+| --- | --- | --- |
+| 到达上车点 | 本单司机 → S-02 reportArrival；ASSIGNED→ARRIVED | 记录 arrivedAt、新 stateVersion、OperationRecord、Outbox；不能由 GPS 接近自动触发 |
+| 确认上车、开始行程 | 本单司机 → S-02 confirmBoardingAndStartTrip；ARRIVED→IN_TRIP | 同一次提交创建唯一 Trip(IN_PROGRESS)，保存 boardingConfirmedAt/startedAt；与取消串行裁决，不留上车成功但还能普通取消的空隙 |
+| 结束行程 | 本行程司机 → S-02 completeTrip；IN_TRIP→COMPLETED | Trip 同时 COMPLETED，记录 endedAt/已核验计量或 null，按本单 ID 释放司机和乘客占用，保存操作/Outbox；不等费用或支付 |
+| 生成费用 | completed/measurement-ready → S-04 唯一 BillingJob | 按原规则与实际计量计算；唯一 Bill + READY + Outbox 同事务。缺计量 FEE_PENDING，不用预估或零冒充结果 |
+| 付款受理 | 乘客 → S-06 createPaymentAttempt | 核验 Bill/归属/版本/支付方式；按 billId 检查唯一未决槽位，保存 CREATED、稳定渠道号、发送任务和操作后返回 202；只是已受理 |
+| 收款确认 | 渠道响应/查询/回调 → S-06 applyVerifiedPaymentFact | 核验成功后，SUCCEEDED + 唯一 Receipt + 释放槽位 + Outbox 同事务。客户端查到 Receipt 才显示付款成功 |
+
+标识链：`RideOrder.rideOrderId → Trip.tripId → BillingJob(TRIP_COMPLETED, tripId) → Bill.billId → PaymentAttempt.paymentAttemptId → Receipt.receiptId`。Trip 按 rideOrderId 唯一，Bill 按 billingJobId 唯一；每个正额 Bill 同时最多一个未决 PaymentAttempt，Receipt 按 billId 唯一。多个失败尝试可保留，但不能重复收款。原 Quote 的 fareRuleVersionId 延续到 Trip/Bill，旧费用不移到新订单。
+
+#### 4.3.2 计量和费用恢复
+
+![行程计费与支付恢复](diagrams/trip-payment-recovery.png)
+
+[Mermaid 源](diagrams/trip-payment-recovery.mmd) · [可放大 SVG](diagrams/trip-payment-recovery.svg)。本图分别讨论计量未齐、付款未知、确定失败、重复/矛盾回调，不能把独立异常分支误看成同一尝试必然经历的顺序。
+
+- S-02 由服务器记录行程时间，使用可信来源的核验距离，时长为 endedAt−startedAt 的非负整秒。司机结束请求不携带金额或任意计量；缺依据时 measurement=null，行程完成不回滚。
+- 授权恢复作业 supplyTripMeasurement 只补齐第一份完整有效计量，记录 meteringSource/measurementVersion，与结束操作串行化。已有计量不可静默覆盖；争议人工复核，已出 Bill 不自动改价。measurement-ready 是补缺事实，不是任意调价命令。
+- S-04 Inbox 与唯一 BillingJob 持久后 ACK，使用 getTripFact/listCompletedTripFacts 补漏；依据补齐先到也恢复同任务。PENDING/RETRYING/REQUIRES_REVIEW 都不能显示“免费”。出 Bill 与完成 Job 同事务，重复消息不生成第二张单。
+- 原规则保存 baseMinor、ratePerMeterMinor、ratePerSecondMinor、minimumMinor 与规则版本，使用精确十进制计算后一次 HALF_UP 舍入。示例 `max(1000, 900 + 8000×0.11 + 720×1)=2500` 分；仅为虚构示例，不是城市真实资费。Bill 同时保存计量和参数以便核对。
+
+#### 4.3.3 支付失败、超时和并发
+
+| 场景 | 权威处理与恢复 | 客户端反馈 |
+| --- | --- | --- |
+| 同一操作重复提交 / 同键异内容 | 原键原结果 / IDEMPOTENCY_CONFLICT；原响应可能只是 CREATED | 查询最新尝试，不把原 202 当作已收款 |
+| 不同键同时付同一 Bill | S-06 串行检查唯一未决槽位；只有一个尝试，另一个 PAYMENT_IN_PROGRESS | 跟踪 currentAttempt，不反复生成键 |
+| 发送前/后崩溃、网络超时 | 发送任务先持久，稳定 channelRequestId 不变；UNKNOWN 保留槽位；queryCharge 查原请求 | 支付结果待确认；关闭页面也由服务恢复 |
+| 渠道超时/NOT_FOUND/自动重试预算耗尽 | 不足以确认为终态失败；持久对账或隔离核查，禁止新扣款 | 处理中或人工核查中，不能显示“失败请再付” |
+| 渠道核验不可逆失败 | FAILED_FINAL，与释放槽位同事务；保留旧尝试 | 用户重新确认后才新键新尝试，仍原子复核资格 |
+| 成功响应、回调、主动查询同时到达 | 同一 applyVerifiedPaymentFact，按 billId/尝试/渠道交易号唯一提交 Receipt | 只显示一次收款，通知迟到不影响事实 |
+| 重复或迟到失败回调 | 一致重复幂等；迟到失败不覆盖 SUCCEEDED/Receipt | 保持已付，不因旧摘要回退 |
+| 验签失败、金额不符或终态矛盾 | 拒绝不可信输入；可信矛盾持久隔离、冻结新付款并人工核查 | 不伪造成功，也不自动发起补扣款 |
+| S-06 查询失败 | 503；S-04 只读聚合不得猜未付款 | UNKNOWN；读权威成功后再决定 |
+
+支付状态 `CREATED/PROCESSING/UNKNOWN` 都属于未决；可信最终成功为 SUCCEEDED，可信不可逆失败为 FAILED_FINAL。超时、普通查询无记录、页面跳转或通知不决定终态。渠道适配必须支持稳定请求号幂等和权威查证；不具备时保持未知并人工处理，不能承诺外部恰好一次扣款。
+
+#### 4.3.4 客户端、鉴权与交互映射
+
+乘客和司机使用各自认证身份，S-02 核验订单分配；费用/付款只给所属乘客。内部服务采用受限身份和可信委托，不接受客户端自填身份标头。写请求带 Idempotency-Key，履约还带 expectedStateVersion。短轮询、请求中禁用同意图按钮，恢复时保持原键；到达/上车开始/完成的未知结果由 getOperationResult + getRideOrder/getTrip 恢复。
+
+费用页分别展示：未出 Bill 为 FEE_PENDING；Bill=0 为 NO_PAYMENT_REQUIRED；正额无 Receipt/未决且权威可读为 UNPAID；有未决为 PAYMENT_PENDING；有 Receipt 为 PAID；权威不可用为 UNKNOWN。付款按钮只是发出意图，最终资格由 S-06 原子裁决。完成行程后占用已释放，旧账可继续处理；不能用支付回调释放司机正在执行的新订单。
+
+| 流程 / 第 3 章交互 | 方法和事实名 | 契约与实体 |
+| --- | --- | --- |
+| 到达/上车/结束 C-08 | reportArrival、confirmBoardingAndStartTrip、completeTrip、getTrip、getOperationResult；ride.order-arrived.v1、ride.trip-started.v1、ride.trip-completed.v1 | OpenAPI / trip-payment.md；RideOrder、Trip、OperationRecord |
+| 计量/费用恢复 C-11/C-12/C-18 | supplyTripMeasurement、getTripFact、listCompletedTripFacts、getTripBill；ride.trip-measurement-ready.v1、pricing.bill-created.v1 | trip-payment.md + 事件目录；Trip、BillingJob、Bill |
+| 付款/查证 C-12/C-13 | createPaymentAttempt、getPaymentAttempt、getBillPaymentState、getBillSnapshot、submitCharge、queryCharge、handlePaymentCallback、applyVerifiedPaymentFact | OpenAPI / trip-payment.md；PaymentAttempt、Receipt；外部支付适配器 |
+| 付款结果/提示 C-14/C-15/C-16 | payment.attempt-updated.v1、payment.receipt-confirmed.v1、deliverHint | 事件目录及既有通知方法；S-04/S-07/S-08 的独立队列只更新各自副本或任务 |
+
+新增 8 个核心操作；前两条流程原 12 个操作保留，并扩展公共操作恢复的所属服务/结果类型。完整方法、权限、输入输出及错误码见 [接驾行程支付契约](../contracts/http/trip-payment.md)，可校验的虚构链见 [示例](../contracts/http/examples/trip-payment/README.md)。具体渠道回调路径/验签配置及其余辅助 HTTP 绑定由 #71199996 汇总，当前逻辑处理规则已给出。
+
+检查与人工推演场景见 [#71199995 记录](checks/trip-payment-71199995.md)。刘子扬复核事件与一致性，刘乐翔复核客户端反馈/接口，杨润东检查场景覆盖；均待真实评审后记录，不预填通过。
 
 ### 4.4 核心接口与事件
 
 - [契约编写约定](../contracts/README.md)。
-- [HTTP 接口契约](../contracts/http/openapi.yaml)：#71199991 的 9 个报价/叫车/接单/恢复操作，加上 #71199994 的取消、取消事实、取消费用查询，共 12 个核心操作；行程支付和辅助接口由 #71199995/96 补齐。
+- [HTTP 接口契约](../contracts/http/openapi.yaml)：#71199991/94 的 12 个操作加上 #71199995 的 8 个接驾、行程、费用和支付操作，共 20 个核心操作；其余辅助接口/内部绑定由 #71199996 汇总。
 - [叫车方法与恢复语义](../contracts/http/booking.md)：包含核心调用、内部方法、错误码及事件对照。
 - [取消与重新叫车契约](../contracts/http/cancellation.md)：取消资格、版本/费用同意上限、计价和通知重试、新旧单关联与内部方法。
+- [接驾行程与支付契约](../contracts/http/trip-payment.md)：计量/费用恢复、支付幂等、超时查证、回调与最终收款。
 - [业务事件契约](../contracts/events/README.md)：#71199990 已定义 13 类事实及 Schema/示例，待随三条时序图逐项交叉核对。
 - 若选择 gRPC，补充 `.proto`；若选择 WebSocket，补充消息类型、方向和字段；未选择的协议无需创建文件。
 
@@ -625,7 +682,7 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 | --- | --- | --- | --- | --- |
 | 4.1 报价/叫车/接单及恢复图 | 9 个 OpenAPI operationId、内部方法、5 类 ride 事件 | `contracts/http/openapi.yaml`、`contracts/http/booking.md`、`contracts/events/README.md`；详见 4.1.5 | Quote、RideOrder、Invitation、OperationRecord、DriverLocation | 已静态对照；人工评审待完成 |
 | 4.2 取消/重叫及竞争恢复图 | 3 个新增 operationId、既有叫车调用、费用回源/补漏方法与 4 类事件 | `contracts/http/cancellation.md`、OpenAPI、事件目录；详见 4.2.5 | Cancellation、BillingJob、Bill、OperationRecord、新旧 RideOrder | 已静态对照；人工评审待完成 |
-| 4.3 接驾/行程/支付 | 待对应卡补齐 | #71199995、#71199996 | Trip、账费与支付 | 未核对 |
+| 4.3 接驾/行程/支付及恢复图 | 8 个新增 operationId、内部计量/渠道方法和 7 类事件 | `contracts/http/trip-payment.md`、OpenAPI、事件目录；详见 4.3.4 | Trip、BillingJob、Bill、PaymentAttempt、Receipt | 已静态对照；人工评审待完成 |
 
 ## 系统整体架构图（5 分）
 

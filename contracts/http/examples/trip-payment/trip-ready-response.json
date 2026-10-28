@@ -1,0 +1,23 @@
+{
+  "trip": {
+    "tripId": "trip-flow-01",
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "driverId": "driver-trip-01",
+    "fareRuleVersionId": "fare-trip-01",
+    "state": "COMPLETED",
+    "boardingConfirmedAt": "2026-10-28T02:03:30Z",
+    "startedAt": "2026-10-28T02:03:30Z",
+    "endedAt": "2026-10-28T02:15:30Z",
+    "measurement": {
+      "actualDistanceMeters": 8000,
+      "durationSeconds": 720,
+      "measurementVersion": 1,
+      "meteringSource": "verified-meter-demo"
+    }
+  },
+  "rideOrderState": "COMPLETED",
+  "stateVersion": 5,
+  "serverTime": "2026-10-28T02:15:35Z",
+  "source": "ride-service"
+}

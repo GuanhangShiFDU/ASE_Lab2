@@ -1,0 +1,25 @@
+{
+  "eventId": "evt-demo-12",
+  "eventType": "payment.attempt-updated.v1",
+  "schemaVersion": "1.0.0",
+  "source": "payment-service",
+  "occurredAt": "2026-10-28T02:16:03Z",
+  "cityId": "shanghai",
+  "aggregateType": "PaymentAttempt",
+  "aggregateId": "attempt-trip-01",
+  "aggregateVersion": 1,
+  "correlationId": "corr-trip-01",
+  "causationId": "op-demo-12",
+  "data": {
+    "paymentAttemptId": "attempt-trip-01",
+    "billId": "bill-trip-01",
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "status": "UNKNOWN",
+    "statusVersion": 2,
+    "amountMinor": 2500,
+    "currency": "CNY",
+    "updatedAt": "2026-10-28T02:16:03Z",
+    "reasonCode": "CHANNEL_TIMEOUT"
+  }
+}

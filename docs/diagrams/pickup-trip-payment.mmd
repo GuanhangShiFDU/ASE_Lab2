@@ -1,0 +1,70 @@
+sequenceDiagram
+    autonumber
+    actor D as 已分配司机
+    actor P as 本单乘客
+    participant R as S-02 ride-service
+    participant F as S-04 pricing-service
+    participant S as S-06 payment-service
+    participant C as 外部支付适配器
+    participant Q as RabbitMQ
+    participant N as S-07 notification-service
+    participant X as 外部通知适配器
+    Note over D,R: 实线请求 / 虚线响应 / 开放箭头异步事实<br/>以下为关键参数子集；写操作都携带身份和原幂等键
+    D->>R: reportArrival(orderId, key, expectedStateVersion)
+    Note over D,F: 校验本人已分配 + ASSIGNED + 版本<br/>ARRIVED / arrivedAt + 操作记录 + Outbox 同事务
+    R-->>D: 200 ArrivalResult
+    R-)Q: ride.order-arrived.v1
+    Q-)N: ride.order-arrived.v1
+    N->>X: deliverHint(deliveryId, passenger, orderId)
+    X-->>N: 回执 / 原任务重试
+    P->>R: getRideOrder(orderId)
+    R-->>P: ARRIVED / 当前 stateVersion
+    D->>R: confirmBoardingAndStartTrip(orderId, key, version, true)
+    Note over D,F: 与取消串行裁决；仅 ARRIVED 可开始<br/>Trip + 上车/开始时间 + IN_TRIP + 操作记录 + Outbox 同事务
+    R-->>D: 200 StartedTripResult
+    R-)Q: ride.trip-started.v1
+    P->>R: getTrip(tripId)
+    R-->>P: IN_PROGRESS / startedAt
+    D->>R: completeTrip(tripId, key, expectedStateVersion)
+    Note over D,F: 服务器 endedAt + 已核验计量或 null<br/>Trip/订单 COMPLETED + 按本单 ID 释放占用 + 操作记录 + Outbox
+    R-->>D: 200 CompletedTripResult（不等待计费或支付）
+    R-)Q: ride.trip-completed.v1
+    Q-)F: ride.trip-completed.v1
+    Note over R,S: Inbox + 唯一 BillingJob(TRIP_COMPLETED, tripId) 持久后 ACK<br/>计量不齐 → FEE_PENDING，补齐/乱序见恢复图
+    F->>R: getTripFact(tripId, trustedSubject)
+    R-->>F: 已授权原规则 / 完成事实 / 冻结计量
+    break 依据缺失或冲突
+        Note over R,S: 保留 PENDING / RETRYING / REQUIRES_REVIEW<br/>恢复同一 Job，不猜费用或回滚行程
+    end
+    Note over R,S: 原规则 + 实际米/秒，精确计算后一次舍入<br/>唯一 Bill + Job READY + Outbox 同事务
+    F-)Q: pricing.bill-created.v1
+    P->>F: getTripBill(tripId)
+    F-->>P: BILL_READY / billId / billVersion / amountMinor
+    P->>S: getBillPaymentState(billId)
+    S->>F: getBillSnapshot(billId, trustedPassenger)
+    F-->>S: 已授权不可变 Bill
+    S-->>P: UNPAID（仅查询结果，提交时重新裁决）
+    Note over P,S: 乘客确认费用及本人支付方式；零额直接无需付款<br/>本图继续正额付款，未决/已付由 S-06 拒绝新尝试
+    P->>S: createPaymentAttempt(key, billId, billVersion, paymentMethodRef)
+    S->>F: getBillSnapshot(billId, trustedPassenger)
+    F-->>S: 原 Bill 快照 / 版本 / 归属
+    Note over F,C: 外部校验在事务外；本地串行检查 billId<br/>CREATED + 未决槽位 + 稳定渠道号 + 发送任务 + 操作记录 + Outbox
+    S-->>P: 202 PaymentAttemptResult（不是已付款）
+    S->>C: submitCharge(channelRequestId, verifiedBill, paymentMethodRef)
+    C-->>S: 经核验的成功事实 / 渠道交易号
+    S->>S: applyVerifiedPaymentFact(verifiedFact)
+    Note over F,Q: SUCCEEDED + 唯一 Receipt + 释放未决槽位 + Outbox 同事务<br/>回调/查询走相同入口；超时与失败见恢复图
+    S-)Q: payment.attempt-updated.v1
+    S-)Q: payment.receipt-confirmed.v1
+    par S-04 支付摘要独立队列
+        Q-)F: payment.receipt-confirmed.v1
+        Note over R,S: 只读摘要，不能改变 Bill 金额或再次发起扣款<br/>S-08 独立队列更新运营投影，无业务裁决权
+    and S-07 通知独立队列
+        Q-)N: payment.receipt-confirmed.v1
+        N->>X: deliverHint(deliveryId, passenger, billId)
+        X-->>N: 回执 / 原任务重试，不影响已收款
+    end
+    P->>S: getPaymentAttempt(paymentAttemptId)
+    S-->>P: SUCCEEDED / Receipt
+    P->>S: getBillPaymentState(billId)
+    S-->>P: PAID / Receipt（旧摘要不能回退）

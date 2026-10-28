@@ -1,0 +1,26 @@
+{
+  "attempt": {
+    "paymentAttemptId": "attempt-trip-01",
+    "billId": "bill-trip-01",
+    "billVersion": 1,
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "amountMinor": 2500,
+    "currency": "CNY",
+    "status": "SUCCEEDED",
+    "statusVersion": 3,
+    "requestedAt": "2026-10-28T02:16:00Z",
+    "lastCheckedAt": "2026-10-28T02:16:10Z",
+    "reasonCode": null,
+    "receipt": {
+      "receiptId": "receipt-trip-01",
+      "billId": "bill-trip-01",
+      "paymentAttemptId": "attempt-trip-01",
+      "amountMinor": 2500,
+      "currency": "CNY",
+      "paidAt": "2026-10-28T02:16:02Z"
+    }
+  },
+  "serverTime": "2026-10-28T02:16:10Z",
+  "source": "payment-service"
+}
