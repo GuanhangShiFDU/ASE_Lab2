@@ -1,0 +1,8 @@
+{
+  "tripId": "trip-flow-01",
+  "rideOrderId": "order-trip-01",
+  "status": "FEE_PENDING",
+  "bill": null,
+  "serverTime": "2026-10-28T02:15:32Z",
+  "source": "pricing-service"
+}

@@ -1,0 +1,5 @@
+{
+  "billId": "bill-trip-01",
+  "billVersion": 1,
+  "paymentMethodRef": "method-owned-01"
+}

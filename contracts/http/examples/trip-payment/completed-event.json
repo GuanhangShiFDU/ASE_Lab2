@@ -1,0 +1,25 @@
+{
+  "eventId": "evt-demo-09",
+  "eventType": "ride.trip-completed.v1",
+  "schemaVersion": "1.0.0",
+  "source": "ride-service",
+  "occurredAt": "2026-10-28T02:15:30Z",
+  "cityId": "shanghai",
+  "aggregateType": "RideOrder",
+  "aggregateId": "order-trip-01",
+  "aggregateVersion": 6,
+  "correlationId": "corr-trip-01",
+  "causationId": "op-demo-09",
+  "data": {
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "stateVersion": 5,
+    "tripId": "trip-flow-01",
+    "driverId": "driver-trip-01",
+    "state": "COMPLETED",
+    "startedAt": "2026-10-28T02:03:30Z",
+    "endedAt": "2026-10-28T02:15:30Z",
+    "fareRuleVersionId": "fare-trip-01",
+    "measurement": null
+  }
+}

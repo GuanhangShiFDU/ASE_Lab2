@@ -1,0 +1,25 @@
+{
+  "billId": "bill-trip-01",
+  "billVersion": 1,
+  "amountMinor": 2500,
+  "currency": "CNY",
+  "status": "PAYMENT_PENDING",
+  "currentAttempt": {
+    "paymentAttemptId": "attempt-trip-01",
+    "billId": "bill-trip-01",
+    "billVersion": 1,
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "amountMinor": 2500,
+    "currency": "CNY",
+    "status": "UNKNOWN",
+    "statusVersion": 2,
+    "requestedAt": "2026-10-28T02:16:00Z",
+    "lastCheckedAt": "2026-10-28T02:16:03Z",
+    "reasonCode": "CHANNEL_TIMEOUT",
+    "receipt": null
+  },
+  "receipt": null,
+  "serverTime": "2026-10-28T02:16:03Z",
+  "source": "payment-service"
+}

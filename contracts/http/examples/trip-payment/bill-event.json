@@ -1,0 +1,26 @@
+{
+  "eventId": "evt-demo-11",
+  "eventType": "pricing.bill-created.v1",
+  "schemaVersion": "1.0.0",
+  "source": "pricing-service",
+  "occurredAt": "2026-10-28T02:15:36Z",
+  "cityId": "shanghai",
+  "aggregateType": "Bill",
+  "aggregateId": "bill-trip-01",
+  "aggregateVersion": 1,
+  "correlationId": "corr-trip-01",
+  "causationId": "op-demo-11",
+  "data": {
+    "billId": "bill-trip-01",
+    "billVersion": 1,
+    "billingJobId": "billing-trip-01",
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "kind": "TRIP_FARE",
+    "sourceId": "trip-flow-01",
+    "amountMinor": 2500,
+    "currency": "CNY",
+    "ruleVersionId": "fare-trip-01",
+    "createdAt": "2026-10-28T02:15:36Z"
+  }
+}

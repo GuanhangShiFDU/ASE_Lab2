@@ -1,0 +1,33 @@
+{
+  "tripId": "trip-flow-01",
+  "rideOrderId": "order-trip-01",
+  "status": "BILL_READY",
+  "bill": {
+    "billId": "bill-trip-01",
+    "billVersion": 1,
+    "billingJobId": "billing-trip-01",
+    "rideOrderId": "order-trip-01",
+    "passengerId": "passenger-trip-01",
+    "kind": "TRIP_FARE",
+    "sourceId": "trip-flow-01",
+    "amountMinor": 2500,
+    "currency": "CNY",
+    "ruleVersionId": "fare-trip-01",
+    "fareDetails": {
+      "measurement": {
+        "actualDistanceMeters": 8000,
+        "durationSeconds": 720,
+        "measurementVersion": 1,
+        "meteringSource": "verified-meter-demo"
+      },
+      "baseMinor": 900,
+      "ratePerMeterMinor": "0.11",
+      "ratePerSecondMinor": "1",
+      "minimumMinor": 1000,
+      "rounding": "HALF_UP"
+    },
+    "createdAt": "2026-10-28T02:15:36Z"
+  },
+  "serverTime": "2026-10-28T02:15:36Z",
+  "source": "pricing-service"
+}

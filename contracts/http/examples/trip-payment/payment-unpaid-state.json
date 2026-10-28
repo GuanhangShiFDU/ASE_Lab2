@@ -1,0 +1,11 @@
+{
+  "billId": "bill-trip-01",
+  "billVersion": 1,
+  "amountMinor": 2500,
+  "currency": "CNY",
+  "status": "UNPAID",
+  "currentAttempt": null,
+  "receipt": null,
+  "serverTime": "2026-10-28T02:15:59Z",
+  "source": "payment-service"
+}

@@ -1,6 +1,6 @@
 # 设计图
 
-本目录用于保存可编辑图源和导出图。已提供三张逻辑数据模型图、#71199991 叫车主流程/恢复图及 #71199994 取消重叫/竞争恢复图；行程支付时序图和总体架构图待后续完成。
+本目录用于保存可编辑图源和导出图。已提供三张逻辑数据模型图、#71199991 叫车主流程/恢复图及 #71199994 取消重叫/竞争恢复图；#71199995 接驾行程支付/异常恢复图；总体架构图待后续完成。
 
 | 图 | 建议图源名 | 说明 |
 | --- | --- | --- |
@@ -11,10 +11,11 @@
 | 客户端恢复与位置/通知 | [源](booking-recovery.mmd) / [PNG](booking-recovery.png) / [SVG](booking-recovery.svg) | 叫车流程补充图，未知结果、刷新、位置权限和只读投影 |
 | 取消与重新叫车 | [源](cancel-rebook.mmd) / [PNG](cancel-rebook.png) / [SVG](cancel-rebook.svg) | 取消资格、计价、通知与全新订单 |
 | 取消竞争与恢复 | [源](cancellation-races.mmd) / [PNG](cancellation-races.png) / [SVG](cancellation-races.svg) | 接单/上车竞争、费用同意上限与原键恢复 |
-| 接驾、上车与支付 | `pickup-trip-payment.mmd` | 包含支付失败及结果处理 |
+| 接驾、行程与支付 | [源](pickup-trip-payment.mmd) / [PNG](pickup-trip-payment.png) / [SVG](pickup-trip-payment.svg) | 到达、上车开始、结束、计费与核验收款 |
+| 行程计费与支付恢复 | [源](trip-payment-recovery.mmd) / [PNG](trip-payment-recovery.png) / [SVG](trip-payment-recovery.svg) | 缺计量、未知付款、确定失败、重复/矛盾回调 |
 | 系统整体架构 | `architecture.mmd` | 汇总最终服务及主要交互，提供图例 |
 
-接驾支付及整体架构的文件名是后续约定，文件尚未创建。可使用 Mermaid，也可根据表达需要使用 `.drawio` 或 `.puml` 等图源，并相应调整引用。
+整体架构的文件名是后续约定，文件尚未创建。可使用 Mermaid，也可根据表达需要使用 `.drawio` 或 `.puml` 等图源，并相应调整引用。
 
 ## 导出与引用
 
@@ -63,3 +64,7 @@ done
 ## 取消与重叫图导出
 
 #71199994 两张图复用上述 `booking-render.json`；将导出循环的图名替换为 `cancel-rebook cancellation-races` 即可。请求与事件定义见 [取消契约](../../contracts/http/cancellation.md)。PNG 已嵌入报告，长图可打开 SVG 放大阅读。
+
+## 接驾、行程与支付图导出
+
+#71199995 两图复用 `booking-render.json`；上述循环的图名使用 `pickup-trip-payment trip-payment-recovery`。PNG 嵌入报告，SVG 可放大阅读。接口与内部方法见 [接驾行程支付契约](../../contracts/http/trip-payment.md)。图表示设计顺序与恢复责任，不是运行日志。

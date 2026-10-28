@@ -1,0 +1,11 @@
+{
+  "billId": "bill-free-02",
+  "billVersion": 1,
+  "amountMinor": 0,
+  "currency": "CNY",
+  "status": "NO_PAYMENT_REQUIRED",
+  "currentAttempt": null,
+  "receipt": null,
+  "serverTime": "2026-10-28T02:15:59Z",
+  "source": "payment-service"
+}

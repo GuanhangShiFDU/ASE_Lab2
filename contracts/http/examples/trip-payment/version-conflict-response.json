@@ -1,0 +1,9 @@
+{
+  "code": "ORDER_VERSION_CONFLICT",
+  "message": "请读取最新状态后确认新的操作意图",
+  "requestId": "req-trip-02",
+  "outcome": "REJECTED",
+  "retryable": false,
+  "rideOrderId": "order-trip-01",
+  "stateVersion": 4
+}
