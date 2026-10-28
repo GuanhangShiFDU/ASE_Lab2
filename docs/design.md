@@ -1,6 +1,6 @@
 # 网约车平台微服务架构设计
 
-> 状态：#71199988 领域规则、#71199989 服务/数据边界、#71199990 通信/事件已合入基线；#71199991 客户端与叫车流程及核心调用草案已编写。4.2/4.3、其余 API、整体架构和真实交叉评审仍待完成。合并与设计推演不等同于运行测试通过或全部组员确认。
+> 状态：#71199988 领域规则、#71199989 服务/数据边界、#71199990 通信/事件已合入基线；#71199991 客户端与叫车流程已合入基线；#71199994 取消/重叫流程、竞争恢复和核心调用草案已编写。4.3、其余 API、整体架构和真实交叉评审仍待完成。合并与设计推演不等同于运行测试通过或全部组员确认。
 
 依据：[Lab 2 作业要求](https://openmsg.yuque.com/openmsg/gp3cfs/eyuag71f933gx041)（核对日期：2026-10-26）。领域分析任务：[#71199988 Domain Analysis & Business Rules](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199988)，负责人：史冠航。
 
@@ -526,10 +526,82 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 
 ### 4.2 取消与重新叫车
 
-- 正常过程：申请取消 → 处理相关费用 → 通知结果 → 重新叫车。
-- 主要异常分支：至少讨论取消与接单冲突，并说明最终状态和费用结果由谁决定。
-- 待补充：时序图、业务规则、各服务处理职责、结果及对应契约。
-- 时序图源建议：`docs/diagrams/cancel-rebook.mmd`，尚未创建。
+本节对应 [#71199994 Cancellation & Rebooking Flow](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199994)，负责人刘子扬。以已合并的 BR-03/04/08、S-02 履约权威和既有事件为设计基线；合并不代表业务规则已由全组确认。本卡将取消状态版本及费用同意上限写成可评审的接口约束。详细请求/响应与错误见 [取消契约](../contracts/http/cancellation.md) 和 [OpenAPI](../contracts/http/openapi.yaml)。
+
+#### 4.2.1 角色、资格与正常流程
+
+| 发起者 / 原状态 | 权限与输入 | 成功结果及费用依据 |
+| --- | --- | --- |
+| 本人乘客 / MATCHING | 订单 ID、原操作键、已读 expectedStateVersion、reason、maxAcceptedFeeMinor | CANCELLED；撤销尚 PENDING 的邀请；无司机占用；免费 |
+| 本人乘客 / ASSIGNED 或 ARRIVED | 同上；看过取消规则并同意费用上限 | 取消裁决时间距 acceptedAt 小于 120 秒为 0，满 120 秒为 500 分；根据原规则快照，不受规则后来变化影响 |
+| 已分配司机 / ASSIGNED 或 ARRIVED | 校验历史分配与当前归属；上限为 0 | CANCELLED；取消免费；通知乘客后由乘客决定是否重新叫车 |
+| 受邀未接受司机 / MATCHING | 只能 rejectInvitation；邀请不授予取消权限 | 取消请求 FORBIDDEN；不能以司机拒绝邀请代替乘客取消 |
+| 任何人 / IN_TRIP、COMPLETED 或 MATCH_FAILED | 不满足普通取消状态 | ORDER_STATE_CONFLICT，不创建取消事实或取消费用；CANCELLED 的其他新键返回 ORDER_ALREADY_CANCELLED |
+
+![取消、费用、通知与重新叫车](diagrams/cancel-rebook.png)
+
+[Mermaid 图源](diagrams/cancel-rebook.mmd) · [可缩放 SVG](diagrams/cancel-rebook.svg)。实线为同步 HTTPS/JSON 请求，虚线为响应，开放箭头为 RabbitMQ 异步事实。图中的并行计价/通知使用独立订阅队列；S-08 的只读投影与 S-03 的关闭事件处理沿用第 3 章，图内以注释说明。参数为关键子集，完整结构以 OpenAPI 为准。
+
+1. 客户端先 `getRideOrder` 读取状态和版本，再提交 `cancelRideOrder`。已有操作键优先重放历史结果；只有新操作进入资格判断。S-02 校验操作者、原状态、版本和按服务端时间计算的费用上限。
+2. S-02 同一事务提交唯一 Cancellation、CANCELLED/新版本、PENDING 邀请撤销、按本单 ID 释放乘客槽位和司机占用、OperationRecord/Outbox。成功响应不等待外部服务，事务失败不能提前返回成功。
+3. 提交后发送 `ride.order-cancelled.v1`。只有确有邀请从 PENDING 变为 REVOKED 才另发 `ride.invitation-closed.v1`；已 ACCEPTED 邀请保持历史状态。S-03 回源看到终态后停止派单，旧计划和旧消息不能复活订单。
+4. S-04 按 cancellationId 创建或恢复同一 BillingJob，用原取消事实和规则生成 0/500 分 Bill；S-07 独立通知乘客及取消前已分配司机。订单已取消、费用待生成、付款未知、通知待投递是不同状态，分别展示。
+5. 乘客确认旧单终态后可重新询价并叫车；新订单沿用第 4.1 节的完整匹配流程。旧费用未生成或未付不阻塞新意图，亦不转移到新单。
+
+#### 4.2.2 并发竞争、收费跨界与响应丢失
+
+![取消竞争与原操作恢复](diagrams/cancellation-races.png)
+
+[Mermaid 图源](diagrams/cancellation-races.mmd) · [可缩放 SVG](diagrams/cancellation-races.svg)。这张补充图是互斥时序的设计推演，不是已经运行的并发测试。
+
+同一已读状态版本的接单/取消，由 **S-02 同一事务边界**决定谁先提交；不是各服务分别确认，也不按客户端点击或消息时间排序。取消先提交则接单不能再成功；接单先提交则旧版本取消冲突。客户端读最新状态后，经用户再次确认的新取消可以合法成功，因此历史上“先接单、后取消”不矛盾，当前状态只有一个。接单成功的旧请求重放仍是原快照，展示前必须回读当前订单。
+
+| 竞争 / 异常 | 权威结果 | 客户端动作 |
+| --- | --- | --- |
+| 取消先提交，接受随后到达 | CANCELLED；后者 ORDER_STATE_CONFLICT；免费且不占司机 | 司机撤下邀请提示，乘客读取消结果 |
+| 接单先提交，乘客携带旧版本取消 | ASSIGNED；本次取消 ORDER_VERSION_CONFLICT，原拒绝记录保留 | 展示司机/规则后重新确认，以新键和新版本提交；不自动改变原键内容 |
+| 状态版本未变，但免费期跨到第 120 秒 | maxAcceptedFeeMinor=0 时 CANCELLATION_FEE_CHANGED；此次没有取消 | 重新显示 500 分规则；用户接受后才能以新键提交；不静默收费 |
+| 司机到达先提交 | 原版本取消冲突；ARRIVED 仍可按规则取消 | 重读、确认；到达本身不另改变费率 |
+| 上车开始先提交 / 取消先提交 | IN_TRIP 拒绝普通取消 / CANCELLED 拒绝创建 Trip | 不对已开始行程做普通取消补偿；司机重新读当前状态 |
+| 原键重复 / 同键修改订单或 body | 原成功或拒绝重放 / IDEMPOTENCY_CONFLICT | 原意图保持键与内容；明确拒绝后再确认新意图 |
+| 另一角色或另一键先取消 | ORDER_ALREADY_CANCELLED，只有一条 Cancellation | getCancellation 展示原事实，不能宣称本次又取消了一次 |
+| 取消响应断线、503 OPERATION_PENDING | 结果未知，可能已经提交 | getOperationResult(originalKey, cancelRideOrder)，必要时原键原内容恢复；不直接重新叫车 |
+
+`expectedStateVersion` 只表达同订单的状态版本；与候选提议用的 aggregateVersion 不混用。费用阈值可能在状态不变时跨过，故还需 `maxAcceptedFeeMinor`（0/500）表达本次同意上限。S-02 在串行裁决点保存 cancelledAt 和原 acceptedAt，S-04 用同样的不可变依据生成 Bill。此新增上限是本组设计提案，待刘乐翔核对提示、杨润东核对时间边界；不是课程强制参数。
+
+#### 4.2.3 费用、通知和占用的失败恢复
+
+| 故障位置 | 持久状态 / 恢复责任 | 不允许的处理 |
+| --- | --- | --- |
+| 取消提交后 MQ 不可用 | S-02 Outbox 重投；getRideOrder/getCancellation 已可读终态 | 重新执行取消或把终态改回未取消 |
+| S-04 收到重复事实或保存 Job 后进程中断 | Inbox 与唯一 `(CANCELLED,cancellationId)` Job 同事务；恢复同一个任务，Bill 按 Job 唯一 | 重复计价生成第二张费用单；只因更新版本更大丢掉旧单尚未处理的费用事实 |
+| 计算失败、快照异常 | RETRYING / REQUIRES_REVIEW，查询 FEE_PENDING 且 bill=null；保留错误和追踪 ID | 填 0、用最新规则覆盖旧规则、让用户重取消“修复”费用 |
+| 源事实未进入计价库 | Outbox 重投 + S-04 按稳定提交游标 listCancellationFacts 补漏；持久任务后推进游标 | GET 查询猜金额；按可能乱序的客户端时间跳过事实 |
+| 外部通知失败 / 先前接单通知晚到 | S-07 原 deliveryId 退避重投；客户端据 orderId 重新读取权威状态 | 通知失败回滚取消；旧提示覆盖 CANCELLED；通知发送时再次释放占用 |
+| 新单已接单，旧取消消息再次到达 | 旧事实只更新旧单费用/通知；占用释放早已在旧单事务按 ID 完成 | 按 driverId 无条件释放新单占用，或把旧债加到新单 |
+
+0 分 Bill 表示无需支付；正数 Bill 只说明费用确定，支付是否完成以及是否可再次发起付款由 S-06 查询/裁决。本卡不把“金额 500”当作“还欠 500”，不在取消回调或费用通知中自动扣款。取消费查询只给订单乘客，历史司机只能查与其相关的取消事实，取消后不再拥有实时位置访问权限。
+
+#### 4.2.4 重新叫车的标识与状态边界
+
+- 前提：同乘客旧单为 CANCELLED/MATCH_FAILED；未知结果必须先查权威状态，不能以没有活动单、没有通知或一个 404 证明取消成功。
+- 操作：新 `createQuote` → 用户确认 → 新键 `createRideOrder`，新 rideOrderId，并设置 sourceOrderId 为原单。新单建立后按第 4.1 节重新匹配，不继承原司机分配。
+- 约束：原 quoteId 不复用；新 quoteId 唯一绑定；全局乘客活动槽位仍唯一。跨标签同键重放，异键竞争最多成功创建一个活动单。sourceOrderId 是历史关联，不是幂等键或永久只允许一次重叫的锁。
+- 保留：旧单、Cancellation、Bill、Receipt 和原规则不变；旧债仍归旧单。本轮规则允许未付旧取消费时新叫车，但不能删旧账或用新报价冲抵。
+- 失败：新报价失效重新报价并确认；来源不合法拒绝；已有活动单读本人现有单。新建响应不明时沿用**新建意图原键**恢复，不能再次换键生成新单。
+
+#### 4.2.5 契约对照与复核交接
+
+| 流程 / 第 3 章交互 | 方法、事件 | 定义及实体边界 |
+| --- | --- | --- |
+| 取消与查询 / C-08 | cancelRideOrder、getCancellation、getOperationResult、getRideOrder | OpenAPI + cancellation.md；S-02 的 Cancellation、RideOrder、OperationRecord |
+| 费用恢复 / C-11/C-12 | ride.order-cancelled.v1、getCancellationFact、listCancellationFacts、getCancellationFee、pricing.bill-created.v1 | 事件目录 + cancellation.md；S-04 BillingJob/Bill；S-02 原事实只读 |
+| 通知 / C-15/C-16 | ride.invitation-closed.v1、deliverHint | 事件目录 + booking.md；S-07 持久任务，不改业务 |
+| 重新叫车 / C-02/C-03 | createQuote、estimateRoute、createRideOrder、getQuoteSnapshot、ride.order-created.v1 | 原叫车契约；新 Quote / 新 RideOrder / sourceOrderId |
+| 上车开始竞争 / C-08 | confirmBoardingAndStartTrip | cancellation.md 记录最小方法边界；#71199995/96 补完整流程和 HTTP 绑定 |
+
+本卡静态检查和评审场景见 [#71199994 检查记录](checks/cancellation-71199994.md)。刘乐翔核对费用上限、冲突和未知状态提示；李全昊核对取消与上车开始的同事务边界；杨润东按场景表检查并记录真实发现。交叉确认尚待执行，不预填“全组通过”。
+
 
 ### 4.3 接驾、上车与支付
 
@@ -543,15 +615,17 @@ S-05 的定位会话只允许当前有权限的司机写入，旧 availabilityVe
 ### 4.4 核心接口与事件
 
 - [契约编写约定](../contracts/README.md)。
-- [HTTP 接口契约](../contracts/http/openapi.yaml)：#71199991 已定义报价/叫车/接单/恢复的 9 个客户端核心操作，其他流程与辅助接口由 #71199996 补齐。
+- [HTTP 接口契约](../contracts/http/openapi.yaml)：#71199991 的 9 个报价/叫车/接单/恢复操作，加上 #71199994 的取消、取消事实、取消费用查询，共 12 个核心操作；行程支付和辅助接口由 #71199995/96 补齐。
 - [叫车方法与恢复语义](../contracts/http/booking.md)：包含核心调用、内部方法、错误码及事件对照。
+- [取消与重新叫车契约](../contracts/http/cancellation.md)：取消资格、版本/费用同意上限、计价和通知重试、新旧单关联与内部方法。
 - [业务事件契约](../contracts/events/README.md)：#71199990 已定义 13 类事实及 Schema/示例，待随三条时序图逐项交叉核对。
 - 若选择 gRPC，补充 `.proto`；若选择 WebSocket，补充消息类型、方向和字段；未选择的协议无需创建文件。
 
 | 流程步骤/时序图箭头 | 接口方法或事件名 | 契约文件及定义位置 | 涉及实体/状态 | 核对结果 |
 | --- | --- | --- | --- | --- |
 | 4.1 报价/叫车/接单及恢复图 | 9 个 OpenAPI operationId、内部方法、5 类 ride 事件 | `contracts/http/openapi.yaml`、`contracts/http/booking.md`、`contracts/events/README.md`；详见 4.1.5 | Quote、RideOrder、Invitation、OperationRecord、DriverLocation | 已静态对照；人工评审待完成 |
-| 4.2/4.3 后续流程 | 待对应卡补齐 | #71199994、#71199995、#71199996 | 取消、行程、账费与支付 | 未核对 |
+| 4.2 取消/重叫及竞争恢复图 | 3 个新增 operationId、既有叫车调用、费用回源/补漏方法与 4 类事件 | `contracts/http/cancellation.md`、OpenAPI、事件目录；详见 4.2.5 | Cancellation、BillingJob、Bill、OperationRecord、新旧 RideOrder | 已静态对照；人工评审待完成 |
+| 4.3 接驾/行程/支付 | 待对应卡补齐 | #71199995、#71199996 | Trip、账费与支付 | 未核对 |
 
 ## 系统整体架构图（5 分）
 

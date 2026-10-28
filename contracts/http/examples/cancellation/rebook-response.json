@@ -1,0 +1,14 @@
+{
+  "rideOrderId": "order-rebook-new",
+  "quoteId": "quote-rebook-new",
+  "sourceOrderId": "order-rebook-old",
+  "cityId": "shanghai",
+  "state": "MATCHING",
+  "stateVersion": 1,
+  "assignedDriverId": null,
+  "createdAt": "2026-10-27T02:02:20Z",
+  "matchDeadline": "2026-10-27T02:03:20Z",
+  "acceptedAt": null,
+  "serverTime": "2026-10-27T02:02:20Z",
+  "source": "ride-service"
+}

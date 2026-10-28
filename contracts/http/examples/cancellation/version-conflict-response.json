@@ -1,0 +1,9 @@
+{
+  "code": "ORDER_VERSION_CONFLICT",
+  "message": "订单状态已改变，请读取最新状态并重新确认",
+  "requestId": "req-cancel-conflict",
+  "outcome": "REJECTED",
+  "retryable": false,
+  "rideOrderId": "order-rebook-old",
+  "stateVersion": 2
+}

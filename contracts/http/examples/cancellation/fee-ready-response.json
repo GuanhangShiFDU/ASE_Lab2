@@ -1,0 +1,20 @@
+{
+  "rideOrderId": "order-rebook-old",
+  "cancellationId": "cancel-rebook-01",
+  "serverTime": "2026-10-27T02:02:12Z",
+  "source": "pricing-service",
+  "status": "BILL_READY",
+  "jobStatus": "READY",
+  "bill": {
+    "billId": "bill-cancel-01",
+    "billVersion": 1,
+    "billingJobId": "job-cancel-01",
+    "rideOrderId": "order-rebook-old",
+    "kind": "CANCELLATION_FEE",
+    "sourceId": "cancel-rebook-01",
+    "amountMinor": 500,
+    "currency": "CNY",
+    "ruleVersionId": "cancel-sh-01",
+    "createdAt": "2026-10-27T02:02:11Z"
+  }
+}

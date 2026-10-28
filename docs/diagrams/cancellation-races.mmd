@@ -1,0 +1,52 @@
+sequenceDiagram
+    autonumber
+    actor P as 乘客
+    actor D as 司机
+    participant R as S-02 ride-service（唯一裁决者）
+    Note over P,R: 同一订单、同一已读状态版本 v；以下为互斥时序的设计推演<br/>箭头代表请求/响应，不以网络到达时间代替事务裁决顺序
+    alt 取消先提交（原 MATCHING v）
+        P->>R: cancelRideOrder(oldKey, expectedStateVersion=v, maxAcceptedFeeMinor=0)
+        R-->>P: 200 CANCELLED / v+1；免费；邀请 REVOKED
+        D->>R: acceptInvitation(invitationId, acceptKey)
+        R-->>D: 409 ORDER_STATE_CONFLICT；无分配
+    else 接单先提交（原 MATCHING v）
+        D->>R: acceptInvitation(invitationId, acceptKey)
+        R-->>D: 200 ASSIGNED / v+1；司机占用已提交
+        P->>R: cancelRideOrder(oldKey, expectedStateVersion=v, maxAcceptedFeeMinor=0)
+        R-->>P: 409 ORDER_VERSION_CONFLICT；该键明确拒绝
+        P->>R: getRideOrder(orderId, minStateVersion=v+1)
+        R-->>P: 当前状态 / acceptedAt / stateVersion
+        opt 用户看过最新状态和规则后再次确认
+            P->>R: cancelRideOrder(newKey, currentVersion, confirmedFeeCap)
+            R-->>P: CANCELLED（200）或新的状态/费用冲突（409）
+            Note over P,R: 合法的先接单后取消，两条历史不矛盾；当前只能有一个状态<br/>历史接受请求重放仍返回原成功快照，客户端随后读取当前订单
+        end
+    end
+    Note over P,R: 状态版本不变也可能跨收费时间点：119.999 秒 → 120 秒<br/>t 取 S-02 串行裁决时间，非客户端点击时间
+    P->>R: cancelRideOrder(key, currentVersion, maxAcceptedFeeMinor=0)
+    R-->>P: 若 t-acceptedAt ≥ 120 秒：409 CANCELLATION_FEE_CHANGED
+    Note over P,R: 本次未取消；用户接受 500 分后以新键确认，不能原键改 body
+    alt 上车开始先提交（原 ARRIVED）
+        D->>R: confirmBoardingAndStartTrip(orderId, startKey, currentVersion, true)
+        R-->>D: 200 IN_TRIP / Trip 已建立
+        P->>R: cancelRideOrder(cancelKey, oldVersion, feeCap)
+        R-->>P: 409 ORDER_STATE_CONFLICT；不能普通取消
+    else 取消先提交（原 ARRIVED）
+        P->>R: cancelRideOrder(cancelKey, currentVersion, feeCap)
+        R-->>P: 200 CANCELLED
+        D->>R: confirmBoardingAndStartTrip(orderId, startKey, oldVersion, true)
+        R-->>D: 409 ORDER_STATE_CONFLICT；不创建 Trip
+    end
+    Note over P,R: 取消响应丢失时，页面显示确认中，不换键、不直接重新叫车
+    P->>R: getOperationResult(originalKey, operationType=cancelRideOrder)
+    alt SUCCEEDED
+        R-->>P: 原 CancellationResult
+        P->>R: getRideOrder(orderId)
+        R-->>P: 当前权威 CANCELLED
+    else 确定 REJECTED
+        R-->>P: 原错误 / 原版本；读取当前状态后再决定
+    else PENDING / NOT_OBSERVED / 连接失败
+        R-->>P: 结果仍未知，不可推断取消失败
+        P->>R: cancelRideOrder(originalKey, originalBody)
+        R-->>P: 原成功 / 原拒绝 / 继续待确认
+    end
