@@ -163,6 +163,6 @@ python3 -m venv .venv
 .venv/bin/python contracts/http/validate_contracts.py
 ```
 
-Windows Git Bash 可用 `py -m venv .venv`，然后把 `.venv/bin/python` 换成 `.venv/Scripts/python.exe`。检查只读本地文件：OpenAPI 3.1、相对引用、请求/响应及错误示例、方法名/事件名覆盖、错误状态映射、操作类型→返回结构、现有示例链和反例；不能证明服务已运行、权限执行、真实并发/签名/扣款可靠性。
+Windows Git Bash 可用 `py -m venv .venv`，然后把 `.venv/bin/python` 换成 `.venv/Scripts/python.exe -X utf8`（安装依赖时无需 `-X utf8`）。部分检查器读取 UTF-8 文件时使用 Python 默认编码；Windows 默认 GBK 环境需显式启用 UTF-8 模式，避免 UnicodeDecodeError。检查只读本地文件：OpenAPI 3.1、相对引用、请求/响应及错误示例、方法名/事件名覆盖、错误状态映射、操作类型→返回结构、现有示例链和反例；不能证明服务已运行、权限执行、真实并发/签名/扣款可靠性。
 
 [本卡实际检查记录](../../docs/checks/core-api-71199996.md) 保存版本/命令/结果和待评审项。李全昊复核字段、权限与数据权威；刘子扬复核事件、状态竞争与幂等。PR 链接和他们的真实确认由 PR 建立/评审后补记，不能用静态检查代替两人的确认。
