@@ -1,0 +1,289 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3200" height="2680" viewBox="0 0 3200 2680" role="img" aria-labelledby="title description">
+<title id="title">网约车平台总体架构</title><desc id="description">三类客户端、API网关、八个业务微服务与其私有逻辑存储、同步请求、RabbitMQ事件及三个外部系统。容量是设计输入，尚未实现或压测。</desc>
+<defs>
+<marker id="request" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2b68af"/></marker>
+<marker id="event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b96c14"/></marker>
+<marker id="data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8660a9"/></marker>
+<marker id="external" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#167e7e"/></marker>
+</defs><g font-family="Hiragino Sans GB, Noto Sans CJK SC, sans-serif">
+<rect x="0" y="0" width="3200" height="2680" rx="0" fill="#f3f6fa" stroke="#f3f6fa" stroke-width="2"/>
+<text x="70" y="85" font-size="48" fill="#233449" font-weight="700">网约车平台 · 总体架构</text>
+<text x="70" y="130" font-size="25" fill="#607189" font-weight="400">ASE LAB 2  /  第 22 小组  /  #71199999  /  设计提案：未部署、未压测</text>
+<text x="2330" y="90" font-size="34" fill="#233449" font-weight="700">上海 · 杭州 · 南京</text>
+<text x="2330" y="132" font-size="23" fill="#607189" font-weight="400">三城隔离流量与队列；独占约束全局有效</text>
+<rect x="55" y="170" width="3090" height="850" rx="16" fill="#ffffff" stroke="#d7e1ec" stroke-width="2"/>
+<text x="85" y="215" font-size="29" fill="#233449" font-weight="700">A  客户端、服务与数据所有权</text>
+<rect x="400" y="245" width="600" height="100" rx="16" fill="#edf4fc" stroke="#a9c3e2" stroke-width="2"/>
+<text x="424" y="285" font-size="28" fill="#233449" font-weight="700">乘客客户端</text>
+<text x="424" y="321" font-size="22" fill="#233449" font-weight="400">报价 / 叫车 / 状态 / 取消 / 付款</text>
+<path d="M 700 345 L 700 385" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="1300" y="245" width="600" height="100" rx="16" fill="#edf4fc" stroke="#a9c3e2" stroke-width="2"/>
+<text x="1324" y="285" font-size="28" fill="#233449" font-weight="700">司机客户端</text>
+<text x="1324" y="321" font-size="22" fill="#233449" font-weight="400">上下线 / 定位 / 邀请 / 履约</text>
+<path d="M 1600 345 L 1600 385" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="2200" y="245" width="600" height="100" rx="16" fill="#edf4fc" stroke="#a9c3e2" stroke-width="2"/>
+<text x="2224" y="285" font-size="28" fill="#233449" font-weight="700">运营客户端</text>
+<text x="2224" y="321" font-size="22" fill="#233449" font-weight="400">获授权城市的只读查询</text>
+<path d="M 2500 345 L 2500 385" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="340" y="385" width="2520" height="85" rx="16" fill="#e6eef8" stroke="#8faed0" stroke-width="2"/>
+<text x="380" y="421" font-size="28" fill="#233449" font-weight="700">API 网关</text>
+<text x="620" y="421" font-size="25" fill="#233449" font-weight="400">HTTPS / UTF-8 JSON · 路由、认证协助、限流、追踪；不拥有业务状态</text>
+<text x="380" y="454" font-size="22" fill="#496581" font-weight="400">28 个客户端操作按所有者路由；轮询读取权威状态；S-03 只提供内部匹配能力</text>
+<path d="M 1600 470 L 1600 505" fill="none" stroke="#2b68af" stroke-width="3"/>
+<path d="M 265 505 L 2925 505" fill="none" stroke="#2b68af" stroke-width="3"/>
+<g id="service-01" data-service="participant-service">
+<path d="M 260 505 L 260 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="85" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="105" y="589" font-size="26" fill="#2b68af" font-weight="700">S-01</text>
+<text x="105" y="632" font-size="23" fill="#233449" font-weight="700">participant-service</text>
+<text x="105" y="675" font-size="24" fill="#233449" font-weight="400">账号与资料</text>
+<path d="M 260 720 L 260 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="85" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="105" y="821" font-size="25" fill="#725092" font-weight="700">S-01 私有逻辑存储</text>
+<text x="105" y="863" font-size="18" fill="#233449" font-weight="400">Account / Role &amp; CityScope</text>
+<text x="105" y="899" font-size="18" fill="#233449" font-weight="400">PassengerProfile / DriverProfile</text>
+<text x="105" y="935" font-size="18" fill="#233449" font-weight="400">不拥有司机在线与占用状态</text>
+</g>
+<g id="service-02" data-service="ride-service">
+<path d="M 640 505 L 640 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="465" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="485" y="589" font-size="26" fill="#2b68af" font-weight="700">S-02</text>
+<text x="485" y="632" font-size="23" fill="#233449" font-weight="700">ride-service</text>
+<text x="485" y="675" font-size="24" fill="#233449" font-weight="400">履约与独占裁决</text>
+<path d="M 640 720 L 640 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="465" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="485" y="821" font-size="25" fill="#725092" font-weight="700">S-02 私有逻辑存储</text>
+<text x="485" y="863" font-size="18" fill="#233449" font-weight="400">RideOrder / Invitation</text>
+<text x="485" y="899" font-size="18" fill="#233449" font-weight="400">ActivePassengerRide / Trip</text>
+<text x="485" y="935" font-size="18" fill="#233449" font-weight="400">DriverServiceState / Cancellation</text>
+</g>
+<g id="service-03" data-service="dispatch-service">
+<rect x="845" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="865" y="589" font-size="26" fill="#2b68af" font-weight="700">S-03</text>
+<text x="865" y="632" font-size="23" fill="#233449" font-weight="700">dispatch-service</text>
+<text x="865" y="675" font-size="24" fill="#233449" font-weight="400">候选计算与匹配提议</text>
+<path d="M 1020 720 L 1020 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="845" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="865" y="821" font-size="25" fill="#725092" font-weight="700">S-03 私有逻辑存储</text>
+<text x="865" y="863" font-size="18" fill="#233449" font-weight="400">MatchPlan / 候选方案</text>
+<text x="865" y="899" font-size="18" fill="#233449" font-weight="400">不拥有有效邀请或司机分配</text>
+<text x="865" y="935" font-size="18" fill="#233449" font-weight="400">不直接暴露客户端接口</text>
+</g>
+<g id="service-04" data-service="pricing-service">
+<path d="M 1400 505 L 1400 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="1225" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="1245" y="589" font-size="26" fill="#2b68af" font-weight="700">S-04</text>
+<text x="1245" y="632" font-size="23" fill="#233449" font-weight="700">pricing-service</text>
+<text x="1245" y="675" font-size="24" fill="#233449" font-weight="400">报价与费用核算</text>
+<path d="M 1400 720 L 1400 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="1225" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="1245" y="821" font-size="25" fill="#725092" font-weight="700">S-04 私有逻辑存储</text>
+<text x="1245" y="863" font-size="18" fill="#233449" font-weight="400">规则版本 / Quote</text>
+<text x="1245" y="899" font-size="18" fill="#233449" font-weight="400">BillingJob / Bill</text>
+<text x="1245" y="935" font-size="18" fill="#233449" font-weight="400">支付摘要是只读副本</text>
+</g>
+<g id="service-05" data-service="location-service">
+<path d="M 1780 505 L 1780 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="1605" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="1625" y="589" font-size="26" fill="#2b68af" font-weight="700">S-05</text>
+<text x="1625" y="632" font-size="23" fill="#233449" font-weight="700">location-service</text>
+<text x="1625" y="675" font-size="24" fill="#233449" font-weight="400">高频位置与空间查询</text>
+<path d="M 1780 720 L 1780 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="1605" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="1625" y="821" font-size="25" fill="#725092" font-weight="700">S-05 私有逻辑存储</text>
+<text x="1625" y="863" font-size="18" fill="#233449" font-weight="400">DriverLocation / sessionEpoch</text>
+<text x="1625" y="899" font-size="18" fill="#233449" font-weight="400">sequence / 最新点 / 空间索引</text>
+<text x="1625" y="935" font-size="18" fill="#233449" font-weight="400">不拥有司机接单资格</text>
+</g>
+<g id="service-06" data-service="payment-service">
+<path d="M 2160 505 L 2160 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="1985" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="2005" y="589" font-size="26" fill="#2b68af" font-weight="700">S-06</text>
+<text x="2005" y="632" font-size="23" fill="#233449" font-weight="700">payment-service</text>
+<text x="2005" y="675" font-size="24" fill="#233449" font-weight="400">支付尝试与核验收款</text>
+<path d="M 2160 720 L 2160 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="1985" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="2005" y="821" font-size="25" fill="#725092" font-weight="700">S-06 私有逻辑存储</text>
+<text x="2005" y="863" font-size="18" fill="#233449" font-weight="400">PaymentAttempt / Receipt</text>
+<text x="2005" y="899" font-size="18" fill="#233449" font-weight="400">持久发送任务 / 未决槽位</text>
+<text x="2005" y="935" font-size="18" fill="#233449" font-weight="400">稳定 channelRequestId</text>
+</g>
+<g id="service-07" data-service="notification-service">
+<path d="M 2540 505 L 2540 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="2365" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="2385" y="589" font-size="26" fill="#2b68af" font-weight="700">S-07</text>
+<text x="2385" y="632" font-size="23" fill="#233449" font-weight="700">notification-service</text>
+<text x="2385" y="675" font-size="24" fill="#233449" font-weight="400">通知投递与收件箱</text>
+<path d="M 2540 720 L 2540 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="2365" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="2385" y="821" font-size="25" fill="#725092" font-weight="700">S-07 私有逻辑存储</text>
+<text x="2385" y="863" font-size="18" fill="#233449" font-weight="400">NotificationDelivery</text>
+<text x="2385" y="899" font-size="18" fill="#233449" font-weight="400">按事实、接收者、通道去重</text>
+<text x="2385" y="935" font-size="18" fill="#233449" font-weight="400">通知不裁决业务成功</text>
+</g>
+<g id="service-08" data-service="operations-service">
+<path d="M 2920 505 L 2920 550" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<rect x="2745" y="550" width="350" height="170" rx="16" fill="#f0f5fb" stroke="#a9c3e2" stroke-width="2"/>
+<text x="2765" y="589" font-size="26" fill="#2b68af" font-weight="700">S-08</text>
+<text x="2765" y="632" font-size="23" fill="#233449" font-weight="700">operations-service</text>
+<text x="2765" y="675" font-size="24" fill="#233449" font-weight="400">运营投影与查询审计</text>
+<path d="M 2920 720 L 2920 785" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<rect x="2745" y="785" width="350" height="185" rx="16" fill="#f6f1fb" stroke="#cbb8dd" stroke-width="2"/>
+<text x="2765" y="821" font-size="25" fill="#725092" font-weight="700">S-08 私有逻辑存储</text>
+<text x="2765" y="863" font-size="18" fill="#233449" font-weight="400">OperationsRecord / QueryAudit</text>
+<text x="2765" y="899" font-size="18" fill="#233449" font-weight="400">按来源维护只读版本</text>
+<text x="2765" y="935" font-size="18" fill="#233449" font-weight="400">每次查询检查当前授权</text>
+</g>
+<text x="85" y="1000" font-size="22" fill="#725092" font-weight="400">紫色箭头 = 本服务拥有并维护的数据；跨服务仅传 ID / 事实 / 请求，不跨库写入。存储产品尚未选型，框不代表独立物理数据库实例。</text>
+<rect x="55" y="1045" width="1800" height="1010" rx="16" fill="#ffffff" stroke="#d7e1ec" stroke-width="2"/>
+<rect x="1880" y="1045" width="1265" height="1010" rx="16" fill="#ffffff" stroke="#d7e1ec" stroke-width="2"/>
+<text x="85" y="1090" font-size="29" fill="#233449" font-weight="700">B  请求协作与外部系统</text>
+<text x="85" y="1126" font-size="22" fill="#607189" font-weight="400">下列 ID 引用 A 中同一服务；实线方向为请求发起方 → 提供方，响应沿原请求返回。</text>
+<rect x="82" y="1155" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1187" font-size="22" fill="#233449" font-weight="700">S-03</text>
+<path d="M 267 1179 L 345 1179" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1187" font-size="22" fill="#233449" font-weight="700">S-02</text>
+<text x="605" y="1187" font-size="21" fill="#233449" font-weight="400">C-05/06  订单与司机资格、邀请提议、无候选结束</text>
+<rect x="82" y="1210" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1242" font-size="22" fill="#233449" font-weight="700">S-03</text>
+<path d="M 267 1234 L 345 1234" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1242" font-size="22" fill="#233449" font-weight="700">S-05</text>
+<text x="605" y="1242" font-size="21" fill="#233449" font-weight="400">C-05  查询新鲜候选位置；资格由 S-02 再裁决</text>
+<rect x="82" y="1265" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1297" font-size="22" fill="#233449" font-weight="700">S-02</text>
+<path d="M 267 1289 L 345 1289" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1297" font-size="22" fill="#233449" font-weight="700">S-04</text>
+<text x="605" y="1297" font-size="21" fill="#233449" font-weight="400">C-03  查询不可变报价与规则快照</text>
+<rect x="82" y="1320" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1352" font-size="22" fill="#233449" font-weight="700">S-02</text>
+<path d="M 267 1344 L 345 1344" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1352" font-size="22" fill="#233449" font-weight="700">S-05</text>
+<text x="605" y="1352" font-size="21" fill="#233449" font-weight="400">C-07  接单前取得新鲜位置证明</text>
+<rect x="82" y="1375" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1407" font-size="22" fill="#233449" font-weight="700">S-05</text>
+<path d="M 267 1399 L 345 1399" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1407" font-size="22" fill="#233449" font-weight="700">S-02</text>
+<text x="605" y="1407" font-size="21" fill="#233449" font-weight="400">C-09/10  定位会话资格 / authorizeOrderLocation</text>
+<rect x="82" y="1430" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1462" font-size="22" fill="#233449" font-weight="700">S-04</text>
+<path d="M 267 1454 L 345 1454" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1462" font-size="22" fill="#233449" font-weight="700">S-02</text>
+<text x="605" y="1462" font-size="21" fill="#233449" font-weight="400">C-18  查询 / 扫描取消与行程事实，补齐计费任务</text>
+<rect x="82" y="1485" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1517" font-size="22" fill="#233449" font-weight="700">计量恢复任务</text>
+<path d="M 267 1509 L 345 1509" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1517" font-size="22" fill="#233449" font-weight="700">S-02</text>
+<text x="605" y="1517" font-size="21" fill="#233449" font-weight="400">C-18  supplyTripMeasurement：授权后补齐计量</text>
+<rect x="82" y="1540" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1572" font-size="22" fill="#233449" font-weight="700">S-04</text>
+<path d="M 267 1564 L 345 1564" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1572" font-size="22" fill="#233449" font-weight="700">S-06</text>
+<text x="605" y="1572" font-size="21" fill="#233449" font-weight="400">C-12  查询权威付款状态；费用状态与收款分开</text>
+<rect x="82" y="1595" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1627" font-size="22" fill="#233449" font-weight="700">S-06</text>
+<path d="M 267 1619 L 345 1619" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1627" font-size="22" fill="#233449" font-weight="700">S-04</text>
+<text x="605" y="1627" font-size="21" fill="#233449" font-weight="400">C-13  查询不可变 Bill；发送前持久化支付尝试</text>
+<rect x="82" y="1650" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1682" font-size="22" fill="#233449" font-weight="700">S-08</text>
+<path d="M 267 1674 L 345 1674" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1682" font-size="22" fill="#233449" font-weight="700">S-01</text>
+<text x="605" y="1682" font-size="21" fill="#233449" font-weight="400">C-17  每次查询获取当前城市 / 角色授权</text>
+<rect x="82" y="1705" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1737" font-size="22" fill="#233449" font-weight="700">S-08</text>
+<path d="M 267 1729 L 345 1729" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="364" y="1737" font-size="22" fill="#233449" font-weight="700">S-02/04/06</text>
+<text x="605" y="1737" font-size="21" fill="#233449" font-weight="400">C-17/18  有界回源核对投影；不是直接读取其他库</text>
+<rect x="82" y="1760" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1792" font-size="22" fill="#233449" font-weight="700">S-04</text>
+<path d="M 267 1784 L 345 1784" fill="none" stroke="#167e7e" stroke-width="3" marker-end="url(#external)"/>
+<text x="364" y="1792" font-size="22" fill="#233449" font-weight="700">外部地图 / 路径</text>
+<text x="605" y="1792" font-size="21" fill="#233449" font-weight="400">C-02  获取距离 / 时长；失败则报价失败</text>
+<rect x="82" y="1815" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1847" font-size="22" fill="#233449" font-weight="700">S-06</text>
+<path d="M 267 1839 L 345 1839" fill="none" stroke="#167e7e" stroke-width="3" marker-end="url(#external)"/>
+<text x="364" y="1847" font-size="22" fill="#233449" font-weight="700">外部支付渠道</text>
+<text x="605" y="1847" font-size="21" fill="#233449" font-weight="400">C-13  幂等提交 / 原请求查询，UNKNOWN 保留槽位</text>
+<rect x="82" y="1870" width="1745" height="48" rx="5" fill="#ffffff" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1902" font-size="22" fill="#233449" font-weight="700">外部支付渠道</text>
+<path d="M 267 1894 L 345 1894" fill="none" stroke="#167e7e" stroke-width="3" marker-end="url(#external)"/>
+<text x="364" y="1902" font-size="22" fill="#233449" font-weight="700">S-06</text>
+<text x="605" y="1902" font-size="21" fill="#233449" font-weight="400">C-13  反向回调：核验关联、金额、币种与真实性</text>
+<rect x="82" y="1925" width="1745" height="48" rx="5" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="2"/>
+<text x="98" y="1957" font-size="22" fill="#233449" font-weight="700">S-07</text>
+<path d="M 267 1949 L 345 1949" fill="none" stroke="#167e7e" stroke-width="3" marker-end="url(#external)"/>
+<text x="364" y="1957" font-size="22" fill="#233449" font-weight="700">外部通知渠道</text>
+<text x="605" y="1957" font-size="21" fill="#233449" font-weight="400">C-16  按 deliveryId 投递；失败不回滚业务</text>
+<text x="85" y="2003" font-size="21" fill="#607189" font-weight="400">请求和外部适配器细节：第 3.1 / 4.4 节、core-api.md；未指定真实供应商或回调 URL。</text>
+<text x="85" y="2035" font-size="21" fill="#607189" font-weight="400">公共读取 / 命令经 A 的网关路由；C-18 的恢复任务归各所有者，不是第九个业务服务。</text>
+<text x="1910" y="1090" font-size="29" fill="#233449" font-weight="700">C  业务事件与恢复</text>
+<text x="1910" y="1126" font-size="23" fill="#607189" font-weight="400">C-04 / 11 / 14 / 15 · AMQP 0-9-1 over TLS</text>
+<rect x="1910" y="1160" width="360" height="92" rx="16" fill="#fff6e9" stroke="#dfbc87" stroke-width="2"/>
+<text x="1930" y="1199" font-size="26" fill="#233449" font-weight="700">S-02 事实发布者</text>
+<text x="1930" y="1233" font-size="21" fill="#233449" font-weight="400">10 类事件 · 本地事务 + Outbox</text>
+<path d="M 2090 1252 L 2090 1302" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<rect x="2310" y="1160" width="360" height="92" rx="16" fill="#fff6e9" stroke="#dfbc87" stroke-width="2"/>
+<text x="2330" y="1199" font-size="26" fill="#233449" font-weight="700">S-04 事实发布者</text>
+<text x="2330" y="1233" font-size="21" fill="#233449" font-weight="400">1 类事件 · 本地事务 + Outbox</text>
+<path d="M 2490 1252 L 2490 1302" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<rect x="2710" y="1160" width="360" height="92" rx="16" fill="#fff6e9" stroke="#dfbc87" stroke-width="2"/>
+<text x="2730" y="1199" font-size="26" fill="#233449" font-weight="700">S-06 事实发布者</text>
+<text x="2730" y="1233" font-size="21" fill="#233449" font-weight="400">2 类事件 · 本地事务 + Outbox</text>
+<path d="M 2890 1252 L 2890 1302" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<rect x="1910" y="1302" width="1160" height="120" rx="16" fill="#fff0d8" stroke="#d7a567" stroke-width="2"/>
+<text x="1940" y="1344" font-size="30" fill="#88531a" font-weight="700">RabbitMQ  ·  ridehailing.events</text>
+<text x="1940" y="1383" font-size="21" fill="#233449" font-weight="400">持久 topic exchange；cityId.eventType 路由；每订阅者 / 城市独立 quorum 队列</text>
+<path d="M 2490 1422 L 2490 1478" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7"/>
+<path d="M 1990 1478 L 2960 1478" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7"/>
+<rect x="1940" y="1505" width="1100" height="65" rx="16" fill="#fffaf1" stroke="#e5d1ae" stroke-width="2"/>
+<path d="M 1925 1537 L 1940 1537" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<text x="1962" y="1545" font-size="26" fill="#233449" font-weight="700">S-03</text>
+<text x="2055" y="1545" font-size="23" fill="#233449" font-weight="400">2 类：order-created / invitation-closed</text>
+<rect x="1940" y="1588" width="1100" height="65" rx="16" fill="#fffaf1" stroke="#e5d1ae" stroke-width="2"/>
+<path d="M 1925 1620 L 1940 1620" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<text x="1962" y="1628" font-size="26" fill="#233449" font-weight="700">S-04</text>
+<text x="2055" y="1628" font-size="23" fill="#233449" font-weight="400">5 类：取消 / 完成 / 计量补齐 / 两类支付</text>
+<rect x="1940" y="1671" width="1100" height="65" rx="16" fill="#fffaf1" stroke="#e5d1ae" stroke-width="2"/>
+<path d="M 1925 1703 L 1940 1703" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<text x="1962" y="1711" font-size="26" fill="#233449" font-weight="700">S-07</text>
+<text x="2055" y="1711" font-size="23" fill="#233449" font-weight="400">11 类：履约提示、账单、支付提示</text>
+<rect x="1940" y="1754" width="1100" height="65" rx="16" fill="#fffaf1" stroke="#e5d1ae" stroke-width="2"/>
+<path d="M 1925 1786 L 1940 1786" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<text x="1962" y="1794" font-size="26" fill="#233449" font-weight="700">S-08</text>
+<text x="2055" y="1794" font-size="23" fill="#233449" font-weight="400">13 类：只读运营投影</text>
+<path d="M 1925 1478 L 1925 1786" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7"/>
+<path d="M 1925 1478 L 1990 1478" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7"/>
+<text x="1910" y="1885" font-size="21" fill="#88531a" font-weight="400">只投递订阅子集，不是全服务广播；事件全集见 contracts/events/README.md。</text>
+<text x="1910" y="1923" font-size="21" fill="#233449" font-weight="400">接收方持久 Inbox / 业务任务后 ACK；去重、来源版本、重试与隔离。</text>
+<text x="1910" y="1961" font-size="21" fill="#233449" font-weight="400">C-18 按事实回源恢复；confirm / ACK 均不等于整个业务完成。</text>
+<text x="1910" y="1999" font-size="22" fill="#88531a" font-weight="700">S-05 高频位置不逐点进入本业务事件总线。</text>
+<text x="85" y="2110" font-size="28" fill="#233449" font-weight="700">容量与一致性取舍  /  题目峰值是设计输入，实际瓶颈与容量仍须实现后验证</text>
+<rect x="55" y="2140" width="1010" height="205" rx="16" fill="#ffffff" stroke="#d7e1ec" stroke-width="2"/>
+<text x="85" y="2187" font-size="29" fill="#29486b" font-weight="700">1,000 次/秒 · 叫车</text>
+<text x="85" y="2234" font-size="24" fill="#233449" font-weight="400">S-03 按城市分配队列与计算配额。</text>
+<text x="85" y="2269" font-size="24" fill="#233449" font-weight="400">S-02 仍在同一逻辑事务域裁决全局独占；</text>
+<text x="85" y="2304" font-size="24" fill="#233449" font-weight="400">按城市分流不等于乘客 / 司机唯一约束可分片。</text>
+<rect x="1095" y="2140" width="1010" height="205" rx="16" fill="#ffffff" stroke="#d7e1ec" stroke-width="2"/>
+<text x="1125" y="2187" font-size="29" fill="#29486b" font-weight="700">20,000 次/秒 · 司机定位</text>
+<text x="1125" y="2234" font-size="24" fill="#233449" font-weight="400">S-05 独立扩展写入、空间索引和最新点读取。</text>
+<text x="1125" y="2269" font-size="24" fill="#233449" font-weight="400">sessionEpoch / sequence 拒绝旧会话与乱序覆盖；</text>
+<text x="1125" y="2304" font-size="24" fill="#233449" font-weight="400">候选快照只辅助推荐，接单仍回 S-02 裁决。</text>
+<rect x="2135" y="2140" width="1010" height="205" rx="16" fill="#ffffff" stroke="#d7e1ec" stroke-width="2"/>
+<text x="2165" y="2187" font-size="29" fill="#29486b" font-weight="700">10,000 次/秒 · 乘客状态查询</text>
+<text x="2165" y="2234" font-size="24" fill="#233449" font-weight="400">约 5 秒短轮询 + 抖动，单入口单在途请求。</text>
+<text x="2165" y="2269" font-size="24" fill="#233449" font-weight="400">版本与条件读取减少传输，鉴权开销仍存在；</text>
+<text x="2165" y="2304" font-size="24" fill="#233449" font-weight="400">旧通知不回退状态，未知付款禁止开启新尝试。</text>
+<rect x="55" y="2380" width="3090" height="245" rx="16" fill="#eaf0f6" stroke="#d7e1ec" stroke-width="2"/>
+<text x="85" y="2423" font-size="27" fill="#233449" font-weight="700">图例与阅读边界</text>
+<path d="M 95 2460 L 165 2460" fill="none" stroke="#2b68af" stroke-width="3" marker-end="url(#request)"/>
+<text x="185" y="2468" font-size="23" fill="#233449" font-weight="400">蓝色实线：HTTPS 请求</text>
+<path d="M 830 2460 L 900 2460" fill="none" stroke="#b96c14" stroke-width="3" stroke-dasharray="10 7" marker-end="url(#event)"/>
+<text x="920" y="2468" font-size="23" fill="#233449" font-weight="400">橙色虚线：异步事实投递</text>
+<path d="M 1600 2460 L 1670 2460" fill="none" stroke="#8660a9" stroke-width="3" marker-end="url(#data)"/>
+<text x="1690" y="2468" font-size="23" fill="#233449" font-weight="400">紫色实线：数据所有权</text>
+<path d="M 2360 2460 L 2430 2460" fill="none" stroke="#167e7e" stroke-width="3" marker-end="url(#external)"/>
+<text x="2450" y="2468" font-size="23" fill="#233449" font-weight="400">青色实线：外部适配器请求</text>
+<text x="85" y="2517" font-size="23" fill="#233449" font-weight="400">箭头表示请求 / 事件 / 所有权方向，不是部署拓扑。B、C 重复的服务 ID 与 A 是同一组件；网关、队列、存储、恢复任务不另算微服务。</text>
+<text x="85" y="2557" font-size="23" fill="#233449" font-weight="400">外部支付回调方向：支付渠道 → S-06（HTTPS，核验后才确认 Receipt）。通知只作提示，账单与收款分别由 S-04 / S-06 负责。</text>
+<text x="85" y="2597" font-size="23" fill="#607189" font-weight="400">来源：docs/design.md 第 2～4 章、HTTP / 事件契约。三个客户端场景详见三组时序主图与恢复图。本图保留整体边界，细节以契约为准。</text>
+</g></svg>
