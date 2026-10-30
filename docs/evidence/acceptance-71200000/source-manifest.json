@@ -1,0 +1,590 @@
+{
+  "source_sha": "b941b92a8a9b3be72f3575c0e6cdb877e6ee0b50",
+  "files": [
+    {
+      "path": ".editorconfig",
+      "sha256": "136699256306bd7e35607d9dcede6640c7f9589d56a64e029902d83b29385e03",
+      "bytes": 188
+    },
+    {
+      "path": ".github/codearts_known_hosts",
+      "sha256": "9db8a233e88a48c626961a450ba2d42e5bf57c4a2d8459d2db5da7732bc4f496",
+      "bytes": 425
+    },
+    {
+      "path": ".github/workflows/sync-codearts.yml",
+      "sha256": "b9117bde6874ca1a714f4cff7dbb58f802da23a8da9582a9848512aea1604da3",
+      "bytes": 2325
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "2ce6247764298f3978ca15c3487b361901633d1a1245ee131ab89598ac4df6c6",
+      "bytes": 318
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "1152c6959e5c9c55d7db0704b6f4ad0cbfb052a093d726592ce95865938f2a70",
+      "bytes": 1061
+    },
+    {
+      "path": "README.md",
+      "sha256": "dd7548789bde5269959c41943861eebe91190e6166bd6dac97820ea9657147fb",
+      "bytes": 9123
+    },
+    {
+      "path": "architecture.png",
+      "sha256": "f278e0ac9dc4aac8491737a47fbf79c3911659765b281fc433e76c1d27cf61c4",
+      "bytes": 912699
+    },
+    {
+      "path": "contracts/README.md",
+      "sha256": "ff4bb6f0b55c487dea5d30bfb39d1804e42f0fef66a5df3b6d9692e5216f96d2",
+      "bytes": 2965
+    },
+    {
+      "path": "contracts/events/CHECKS.md",
+      "sha256": "5a63ba96f3455db09355c01ddc7fc5bec04a67d7368e5e6e2e1f856cb0b06a3d",
+      "bytes": 3613
+    },
+    {
+      "path": "contracts/events/README.md",
+      "sha256": "3e45961606b326b78ffbbc634ca6409ebf10c6cd6490f5c31ed037b41cdbd716",
+      "bytes": 26205
+    },
+    {
+      "path": "contracts/events/event.schema.json",
+      "sha256": "1f30bf7d01d95f1baa89748ad94ebc052a32d511a9edbeec8898c717cad9e04b",
+      "bytes": 29953
+    },
+    {
+      "path": "contracts/events/examples/payment.attempt-updated.v1.json",
+      "sha256": "a4b8bf4dfc730b7b6ce8f4b4f8cdf98c3a251aa8b9c8c588d079d548a5790816",
+      "bytes": 703
+    },
+    {
+      "path": "contracts/events/examples/payment.receipt-confirmed.v1.json",
+      "sha256": "cfe18e2f2ecda3285388539900a719235c1bc28055ed37c9013511e99c85aab3",
+      "bytes": 645
+    },
+    {
+      "path": "contracts/events/examples/pricing.bill-created.v1.json",
+      "sha256": "c99cafa6706a301ec9354641a8562422d26eb133e0266f0566e14048f89ef6ff",
+      "bytes": 711
+    },
+    {
+      "path": "contracts/events/examples/ride.invitation-closed.v1.json",
+      "sha256": "0367e3ddf37af5898d586a9cd512e7ed01e6b10c2a3157dfcc60de589633319f",
+      "bytes": 617
+    },
+    {
+      "path": "contracts/events/examples/ride.invitation-issued.v1.json",
+      "sha256": "814f970c61f50bc0dca0ccccfe630bb24a6c384a1e48bce0f007fd7f88f821de",
+      "bytes": 656
+    },
+    {
+      "path": "contracts/events/examples/ride.match-failed.v1.json",
+      "sha256": "f4a97f8fe424af7f7fbf8a2cdcc8c986e5d538dd233150dcc236ec7fdd55deff",
+      "bytes": 574
+    },
+    {
+      "path": "contracts/events/examples/ride.order-arrived.v1.json",
+      "sha256": "e1f6041124d68e8a2dce262b4a07103b9f2c7be845f7085b15e90ef6e847fd58",
+      "bytes": 562
+    },
+    {
+      "path": "contracts/events/examples/ride.order-assigned.v1.json",
+      "sha256": "758d75e41aa0c18be11baccf3c37c091ec5ae0fca167bfc7cad47adfb98ab015",
+      "bytes": 603
+    },
+    {
+      "path": "contracts/events/examples/ride.order-cancelled.v1.json",
+      "sha256": "e28ba3e69584f2262b301a88d6bfb16474b190512eb92e881a485714152a3077",
+      "bytes": 935
+    },
+    {
+      "path": "contracts/events/examples/ride.order-created.v1.json",
+      "sha256": "fb67e7739775fb8035839ca7d95f5a8ca9b5186c8f89458e8a4af54e0a1a4c9a",
+      "bytes": 721
+    },
+    {
+      "path": "contracts/events/examples/ride.trip-completed.v1.json",
+      "sha256": "23dc68f9c68ea788267e0743edef4e08341e7afa0a17b814ee229d27606aac11",
+      "bytes": 698
+    },
+    {
+      "path": "contracts/events/examples/ride.trip-measurement-ready.v1.json",
+      "sha256": "3ca771f8253b3485c518af82c64e49f99235b310df83211ecf82c02b400e4c76",
+      "bytes": 780
+    },
+    {
+      "path": "contracts/events/examples/ride.trip-started.v1.json",
+      "sha256": "bb48b1bf929442b8cf3610e637dc2d6d09302fd3f46d64545cf785d85c2ea491",
+      "bytes": 642
+    },
+    {
+      "path": "contracts/events/requirements-check.txt",
+      "sha256": "293c30096386533788c47cbc9d66f60e1625b3e9b65fee475de21e1e1654026d",
+      "bytes": 27
+    },
+    {
+      "path": "contracts/events/validate.py",
+      "sha256": "59328139e2fb8cb4e33a581dc589243f0d12d77e680ff9ba8a2e770abe2678a1",
+      "bytes": 3726
+    },
+    {
+      "path": "contracts/http/booking.md",
+      "sha256": "8e5485e2749a47cdaeef4674a42ceed64f8d1284700bc0040305884b1b990452",
+      "bytes": 14519
+    },
+    {
+      "path": "contracts/http/cancellation.md",
+      "sha256": "c9d7c7839c3dfbb4e5f9c31ab982aec40839d0e4ffb0795ea1240cfe7e3bf8b3",
+      "bytes": 13553
+    },
+    {
+      "path": "contracts/http/core-api.md",
+      "sha256": "22bd0a3c1fd6ba6cb0329d72e7059ada9cec602b3da463cc43001770420e7afe",
+      "bytes": 26670
+    },
+    {
+      "path": "contracts/http/error-codes.yaml",
+      "sha256": "9b6be4c24466dfc915fb8e308e46d50e60f1668e7c2577bc5ec2ef6c481644e0",
+      "bytes": 1248
+    },
+    {
+      "path": "contracts/http/examples/cancellation/README.md",
+      "sha256": "20abcb40463a1499ccc39c0ebd04d994a4d14f77beb60f8bcda301ec31ae4fd9",
+      "bytes": 1472
+    },
+    {
+      "path": "contracts/http/examples/cancellation/cancel-request.json",
+      "sha256": "20938ff40f77cf8e952533454c4624c118fafa1e2571c7ac98dfe338d7c31605",
+      "bytes": 91
+    },
+    {
+      "path": "contracts/http/examples/cancellation/cancelled-event.json",
+      "sha256": "2ebf3edc6c1c1b68c7154010213f3a14f658b5b5f2ee3d7c01860ef21e166e4c",
+      "bytes": 954
+    },
+    {
+      "path": "contracts/http/examples/cancellation/cancelled-response.json",
+      "sha256": "95766e83e2b81d4ef00be3f85b368ceab2f2ac6d1664ec6fbaca15efa05dfe21",
+      "bytes": 1004
+    },
+    {
+      "path": "contracts/http/examples/cancellation/fee-created-event.json",
+      "sha256": "f3268e48b7d99a3c31e86f35b69634c6bac4985403fd5fe9b82e5ee9760e7075",
+      "bytes": 749
+    },
+    {
+      "path": "contracts/http/examples/cancellation/fee-free-response.json",
+      "sha256": "5683c766a528a492c1fc7a7e2a7d34d3341f6dbd6e867db37c6695a7a6ca53e2",
+      "bytes": 524
+    },
+    {
+      "path": "contracts/http/examples/cancellation/fee-pending-response.json",
+      "sha256": "25c94eacc5dd1d0a866b7caa3c106c332d31db832c2afdd5e92029a4a71ae548",
+      "bytes": 221
+    },
+    {
+      "path": "contracts/http/examples/cancellation/fee-ready-response.json",
+      "sha256": "2213b6129475f428ac7eca5cfd26c98f8d16bb9b95de134c67070a077667341d",
+      "bytes": 540
+    },
+    {
+      "path": "contracts/http/examples/cancellation/operation-succeeded-response.json",
+      "sha256": "b1116fec28d4103aecd2b0a9f5119adc5b451f2379058a874adcf2ac9b2ea81f",
+      "bytes": 1224
+    },
+    {
+      "path": "contracts/http/examples/cancellation/rebook-request.json",
+      "sha256": "b79d58cf89c598e0dfee3cd1b799e2f6dc67107da236065ff9efbd1baa3be5d3",
+      "bytes": 75
+    },
+    {
+      "path": "contracts/http/examples/cancellation/rebook-response.json",
+      "sha256": "a39a163311699566c2631fb4ac14cb93adfddbc03a3c57ecd9e3d0a605dc3c37",
+      "bytes": 380
+    },
+    {
+      "path": "contracts/http/examples/cancellation/version-conflict-response.json",
+      "sha256": "d6994ac06e715f9a3db2c417bdbc7b87d1b92450ad70cd08df0b0af90cdebea4",
+      "bytes": 259
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/README.md",
+      "sha256": "f5e776f12bc357a23e7c6b62b6d805875db0a0cd2ae84a8f98da5083b8d1e78b",
+      "bytes": 3272
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/arrival-event.json",
+      "sha256": "a579a1d40fab4218e1e7fa2eff8f1d0528379a1ad993a350241801301e6c6805",
+      "bytes": 562
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/arrival-request.json",
+      "sha256": "e24cd61153d652b7936d4f216f4f1a902916cec4bda75d84ff528c579efdad6c",
+      "bytes": 32
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/arrival-response.json",
+      "sha256": "9afd2393ed100b5dce8b84a85094e215f2934ec13bb4ab283321a6470df47d18",
+      "bytes": 219
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/attempt-event.json",
+      "sha256": "26f5091d12cb993a0c92538ea354cb52c36525f1d525c6a966018dba0b15fb45",
+      "bytes": 703
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/bill-event.json",
+      "sha256": "e2da918ff0113c9abfbc45caec08de60cdfe8a266905a56ccc7f6d6f45d0e10e",
+      "bytes": 713
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/bill-pending-response.json",
+      "sha256": "335bef1584b239fdee4a059b17d38aba7459f6179de32d05fc3b6847617e9f24",
+      "bytes": 179
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/bill-ready-response.json",
+      "sha256": "a5d2b9ea576b563505efdac5d60ce90af62fd75ccbc907ae9f142a74e22b14b2",
+      "bytes": 887
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/complete-request.json",
+      "sha256": "54abaf9a52b1e050ed6feed696c1353b020e3b791f02e88826113a18e70b6a51",
+      "bytes": 32
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/complete-response.json",
+      "sha256": "efc53ec8afdc0d4238dfbfa7595140dec0d2b3682d11b326f4cdbc61b13d2313",
+      "bytes": 504
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/completed-event.json",
+      "sha256": "038f4c709e6d8cf39acaf3c7c44ece717943d7a479b697e0abce45626c855df6",
+      "bytes": 700
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/measurement-event.json",
+      "sha256": "b30be11b080f502bb10daa13c5e09ea6806deccd3fd9a75dcf8db9bae66ac1da",
+      "bytes": 782
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-created-response.json",
+      "sha256": "bb440a1b98854eb7fbff967b3dee506d303618f4f46b0201f801483381faa898",
+      "bytes": 476
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-failed-final-response.json",
+      "sha256": "d9bc6e24defe94c751a81c2cdd8011348a5310594d6900d2c0c97aa0c6986c09",
+      "bytes": 528
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-free-state.json",
+      "sha256": "53c71be816bbf72fdf96646f519a331b5b30679f14e73a0be2e73f4e87eaec92",
+      "bytes": 243
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-operation-response.json",
+      "sha256": "5b039ce51d4b657db8d5ede213f327f2d92101e57f31e953e4955ea81efde5b4",
+      "bytes": 671
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-paid-state.json",
+      "sha256": "c5b48338de99d3ce152ed2b748b6d75083cb17db8db66e221ddd8361bc66a20c",
+      "bytes": 426
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-pending-state.json",
+      "sha256": "162509c7cde9431cfdfb7fcb115465eaf33aa643ba29a9f3a2a2d29578ba718d",
+      "bytes": 656
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-request.json",
+      "sha256": "a5c6d4318a80bcb79655d6615f1dc406fd6fb6a8aad1d882a613fb47457f1f91",
+      "bytes": 92
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-succeeded-response.json",
+      "sha256": "b49605ce33eca53bd0ed885c2f130b49ce4381455eec4870e158e6c569c7021b",
+      "bytes": 705
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-unknown-response.json",
+      "sha256": "982c6084867b6b4a138bc3ac833e2330854e223d59f41f144e0633bdac138e9f",
+      "bytes": 507
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/payment-unpaid-state.json",
+      "sha256": "f0c23024a0ebb17cee908dfd995fae010d10ab1e698c80d5d946e9a733e0da0a",
+      "bytes": 233
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/receipt-event.json",
+      "sha256": "8b976a5b0e15063890f8722864e3f389c3d334f399e7ec622ea99bf18ba59e01",
+      "bytes": 645
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/start-request.json",
+      "sha256": "b400fe176aefe6ab0d67b9d68b582ec8926693e0377b5453f8d3ba1f3d71cb25",
+      "bytes": 61
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/start-response.json",
+      "sha256": "9606150ed47367bb83dd9fffb8dee4b9f1f57384ccd92a478787ac302b6b2565",
+      "bytes": 486
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/started-event.json",
+      "sha256": "4684eb309a29ec616d78d9811b6de214bbec87c6afe9d7d833b772903c38dc9e",
+      "bytes": 642
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/trip-ready-response.json",
+      "sha256": "b612286459f4b955d77224193814bcc3fe24b19ee3117679a84dde3aaca36600",
+      "bytes": 650
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/unknown-operation-response.json",
+      "sha256": "24512e04fac543b37709159fde402174610f8adfcfbf5ba478890d576feae10d",
+      "bytes": 173
+    },
+    {
+      "path": "contracts/http/examples/trip-payment/version-conflict-response.json",
+      "sha256": "81c6cbc7f2f0be2ba39d06e38644c494b582ea82ad964e8455f3daa9bc3fb152",
+      "bytes": 236
+    },
+    {
+      "path": "contracts/http/internal.yaml",
+      "sha256": "2344256c2fc984b57da3e0f44c24fb789180cc1479970c61b8d0e9386b288480",
+      "bytes": 84485
+    },
+    {
+      "path": "contracts/http/openapi.yaml",
+      "sha256": "8b6a6327dfc34ff4d7b44f9c3efa55a6c9a19c10245d3e1b3585de47e5a4374b",
+      "bytes": 185992
+    },
+    {
+      "path": "contracts/http/requirements-check.txt",
+      "sha256": "c8e949602e6346bdd2461ad2cb5ba26958748db4fabbdb926319437b86872fbd",
+      "bytes": 71
+    },
+    {
+      "path": "contracts/http/trip-payment.md",
+      "sha256": "3f57033ff9be4c3c67c886ff0d130b04b7093a5f4aa544687d646f7e42c6d321",
+      "bytes": 17848
+    },
+    {
+      "path": "contracts/http/validate.py",
+      "sha256": "9144502e0d104714dec4ad48d47c8ccd3c6fa150b4a438222fe256caacf7e16d",
+      "bytes": 3153
+    },
+    {
+      "path": "contracts/http/validate_cancellation.py",
+      "sha256": "b76e6153cd12d02c7417d8144b875d59d6d4d24eadae9e206c578fc83f131eff",
+      "bytes": 8095
+    },
+    {
+      "path": "contracts/http/validate_contracts.py",
+      "sha256": "b4f00ad4c1a945422d08b9726a7e63640bbc35ebff3de46ae9773fc1ddd63086",
+      "bytes": 11327
+    },
+    {
+      "path": "contracts/http/validate_trip_payment.py",
+      "sha256": "8e69627833b2a9ecc602a882409586cd71f7851ea6027141214e7804fce2fefa",
+      "bytes": 12188
+    },
+    {
+      "path": "docs/checks/architecture-71199999.md",
+      "sha256": "12d2716ed978482671a4f1ecfe69d5a98a71963ae76342d4c0a9c21cee3fbb02",
+      "bytes": 5405
+    },
+    {
+      "path": "docs/checks/booking-71199991.md",
+      "sha256": "0630930e4a826ae38a50f3cd835248b79daa63cba34d4665a2a3132652c303de",
+      "bytes": 4699
+    },
+    {
+      "path": "docs/checks/cancellation-71199994.md",
+      "sha256": "b25bfa62738222feb24da42586cf9f3e6caf0a66cff0e09470ccacf4fa53bd94",
+      "bytes": 6324
+    },
+    {
+      "path": "docs/checks/core-api-71199996.md",
+      "sha256": "66c7f1cfcf6a0ec3554fb06520c96a2fbd99dfcc6681bcdae9a84e68d03f77d3",
+      "bytes": 6937
+    },
+    {
+      "path": "docs/checks/review-plan-71199997.md",
+      "sha256": "1f6767aeba91b8cd82cb8442a8ba2e1c56867183ed24c0953c629c56d26dd9e3",
+      "bytes": 3071
+    },
+    {
+      "path": "docs/checks/trip-payment-71199995.md",
+      "sha256": "0d5b50857cc95fc2c4d7e6e1d4b321790c632c08e298e806a54187e58971d7ff",
+      "bytes": 7331
+    },
+    {
+      "path": "docs/design.md",
+      "sha256": "4d33f4faf6c22377c7cd1715b5418002ede7202bc5dd418b970aaa968cd5ef99",
+      "bytes": 121061
+    },
+    {
+      "path": "docs/diagrams/README.md",
+      "sha256": "70a200588ca70eb7852bbcfec6362700d8e2ac48a818726ded30147790f1d8f7",
+      "bytes": 6547
+    },
+    {
+      "path": "docs/diagrams/architecture.svg",
+      "sha256": "48fbf0e860e815ac8b28c4eb54fac6223ccce9a3437d1852e02c2afffb3053d0",
+      "bytes": 30946
+    },
+    {
+      "path": "docs/diagrams/booking-recovery.mmd",
+      "sha256": "a9a282f011f9251b80c3772c5a91723cd340919d528277edd32e1775b742a675",
+      "bytes": 2581
+    },
+    {
+      "path": "docs/diagrams/booking-recovery.png",
+      "sha256": "5e32d709e53ede5378044caeee39b9b69d793279bac4f17a5cbd91a9f04361a3",
+      "bytes": 590841
+    },
+    {
+      "path": "docs/diagrams/booking-recovery.svg",
+      "sha256": "4c7b5ca6f8925e4280618100d733ff74de8dcc6e3c65563922a6edde23eddaa8",
+      "bytes": 50781
+    },
+    {
+      "path": "docs/diagrams/booking-render.json",
+      "sha256": "3b1ab41f1cebc40dc9552b46c226c676b77bee9e7190d7453749aaef4d36ed4c",
+      "bytes": 202
+    },
+    {
+      "path": "docs/diagrams/cancel-rebook.mmd",
+      "sha256": "9bc5bae4a33371b036cfbaf46e3e8e88c829bd1b8d4f4f299a1923d77bb08d6e",
+      "bytes": 4924
+    },
+    {
+      "path": "docs/diagrams/cancel-rebook.png",
+      "sha256": "ebec3f41f72462dfabad6a06876055697a7ffd1427814d5658695ad8bd064544",
+      "bytes": 1170638
+    },
+    {
+      "path": "docs/diagrams/cancel-rebook.svg",
+      "sha256": "495eba298ea1400fd32266e8d22f076201f0c7e5caebbed8322a8ff3e8d9ca04",
+      "bytes": 72610
+    },
+    {
+      "path": "docs/diagrams/cancellation-races.mmd",
+      "sha256": "8da2dcedf37784e2e9eb37a32f4d0ecd2b9afa891d9dbf9f3c16adca8187a64d",
+      "bytes": 3085
+    },
+    {
+      "path": "docs/diagrams/cancellation-races.png",
+      "sha256": "b7b487ff85722115a0a240c5b3f3266231c5a5d9f800e539823189711e6ebed8",
+      "bytes": 651623
+    },
+    {
+      "path": "docs/diagrams/cancellation-races.svg",
+      "sha256": "65918bf83835ce027875ccf80a99e712f28ac856ccbeba3b03e47ec707af5afa",
+      "bytes": 51464
+    },
+    {
+      "path": "docs/diagrams/data-model-billing.mmd",
+      "sha256": "0163b1dcd920c74c2b72da39bd2529f30ea93d6f8461f709eacbbef24db204ef",
+      "bytes": 1958
+    },
+    {
+      "path": "docs/diagrams/data-model-billing.png",
+      "sha256": "6aa77a80c5d0b7592885a35f047f7f2b2d38d49a98a73c5d29e82f91be45364b",
+      "bytes": 326516
+    },
+    {
+      "path": "docs/diagrams/data-model-ride.mmd",
+      "sha256": "e0042ec420dd93add207a0f08a6ebf5e9b2316db4e286c5c608d733f877c5187",
+      "bytes": 2047
+    },
+    {
+      "path": "docs/diagrams/data-model-ride.png",
+      "sha256": "93c8b6fa64144b9766075e5d075aa5142192f582849c662ee5a5b1ed52664200",
+      "bytes": 285248
+    },
+    {
+      "path": "docs/diagrams/data-model-support.mmd",
+      "sha256": "23fcd3500031086113f886944cc9ebcd240bb4b68d9c827bd6ff883e6e6cb54c",
+      "bytes": 2164
+    },
+    {
+      "path": "docs/diagrams/data-model-support.png",
+      "sha256": "a489bbbb88dba1bdd432470b3b74d85819cdfe87275c7cb27c0874157a0522c1",
+      "bytes": 371384
+    },
+    {
+      "path": "docs/diagrams/export-architecture.cjs",
+      "sha256": "34a2c83b7caf53f22ad68f45b0bede916de199805442f1f50d28d8807239167f",
+      "bytes": 484
+    },
+    {
+      "path": "docs/diagrams/pickup-trip-payment.mmd",
+      "sha256": "133e89670ff2965c7536b1d69e93b5888513eff649bb8c5c7dceca07fb89fb06",
+      "bytes": 4031
+    },
+    {
+      "path": "docs/diagrams/pickup-trip-payment.png",
+      "sha256": "36aa17cab0dc08f9fbf6f224cd9e117b0de9833d9c2a5cd360d71209f7ad334c",
+      "bytes": 1022729
+    },
+    {
+      "path": "docs/diagrams/pickup-trip-payment.svg",
+      "sha256": "74671f765cef1d6d9905bb2ccb21c535d829e7eb84a6874917435e070c353281",
+      "bytes": 66766
+    },
+    {
+      "path": "docs/diagrams/quote-request-match.mmd",
+      "sha256": "cea7d8207d1f9ce18019deecf61025d67cd2dbe034123c1c291b4fa12e97ba4e",
+      "bytes": 4632
+    },
+    {
+      "path": "docs/diagrams/quote-request-match.png",
+      "sha256": "be4fe036baaeb7eb487acbca9c72187c355bd38cdcc89a61e6a1e45cbb546542",
+      "bytes": 1055884
+    },
+    {
+      "path": "docs/diagrams/quote-request-match.svg",
+      "sha256": "2f32ff9bb7be3150889ced8109a432773c6a9930ee0190565301c9902f5c5468",
+      "bytes": 70055
+    },
+    {
+      "path": "docs/diagrams/trip-payment-recovery.mmd",
+      "sha256": "6dc4dcaea6ee4858857492be16496797efea93cf893c7275554317de4b94ea4b",
+      "bytes": 4548
+    },
+    {
+      "path": "docs/diagrams/trip-payment-recovery.png",
+      "sha256": "6a02725df6e19ae9c1a3dec5ade4ed672b54cc25f266af83ab81d3759a5c3724",
+      "bytes": 1034394
+    },
+    {
+      "path": "docs/diagrams/trip-payment-recovery.svg",
+      "sha256": "0d9ba17c4c46194967a190ef76d2442e8557631f6f1dbcdab6cde024110835b3",
+      "bytes": 64461
+    },
+    {
+      "path": "docs/review-checklist.md",
+      "sha256": "9f0b5781f58a1aa65e42533693057e7f99dc448cdd5d2a2051543d391d5e6214",
+      "bytes": 27772
+    },
+    {
+      "path": "docs/review-issues.md",
+      "sha256": "8859a452bbbdad8c5d274ef2ea0d67a2ef1f071e17f380024025941c54c4df4f",
+      "bytes": 3447
+    },
+    {
+      "path": "docs/review-results.md",
+      "sha256": "7946ed91a429e9735828cd216ac0698566481a3c7925ff8c41bfd20a22ef04d7",
+      "bytes": 6281
+    }
+  ]
+}

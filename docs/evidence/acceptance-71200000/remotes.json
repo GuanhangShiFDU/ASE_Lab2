@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-10-30T05:37:25.469383+00:00",
+  "records": [
+    {
+      "remote": "GitHub",
+      "url": "git@github.com:GuanhangShiFDU/ASE_Lab2.git",
+      "exit_code": 0,
+      "stdout": "b941b92a8a9b3be72f3575c0e6cdb877e6ee0b50\trefs/heads/master\n",
+      "stderr": ""
+    },
+    {
+      "remote": "CodeArts",
+      "url": "git@codehub.devcloud.cn-north-4.huaweicloud.com:c1aa0a224dba4c2591226b87a5af9407/lab2.git",
+      "exit_code": 0,
+      "stdout": "b941b92a8a9b3be72f3575c0e6cdb877e6ee0b50\trefs/heads/master\n",
+      "stderr": ""
+    }
+  ]
+}

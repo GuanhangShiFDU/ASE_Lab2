@@ -1,0 +1,2 @@
+PASS cancellation design: 9 HTTP examples; 2 events; 17 chain checks; 22 invalid fixtures rejected.
+Static examples only; no live API, database, races, broker retries or payment was executed.

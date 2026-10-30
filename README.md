@@ -38,6 +38,7 @@
 - [契约入口](contracts/README.md)：核心接口与业务事件。
 - [总体架构 PNG](architecture.png) / [可编辑 SVG](docs/diagrams/architecture.svg)：三类客户端、八服务、数据归属、请求/事件及外部依赖。
 - [设计评审清单](docs/review-checklist.md) / [逐项结果](docs/review-results.md) / [问题台账](docs/review-issues.md)：人工执行后记录真实结论。
+- [#71200000 固定版本验收记录](docs/validation.md)：CodeArts 候选、自动日志、57 项辅助设计核对及真实待确认项。
 - [#71199999 整合检查及 QA 交接](docs/checks/architecture-71199999.md)：基线版本、检查结果和后续验收流程。
 
 ```text
@@ -48,10 +49,12 @@ ASE_Lab2/
 │   ├── design.md                    # 四章设计 + 整体图 + 评审记录
 │   ├── diagrams/                    # 整体 SVG、3 张数据图、6 张流程图及图源
 │   ├── checks/                      # 各卡真实静态检查记录
+│   ├── validation.md / evidence/    # 固定版本验收及原始证据
 │   └── review-*.md                  # 人工清单、结果、问题
 ├── contracts/
 │   ├── http/                        # 公网/内部 OpenAPI、方法说明、示例与检查器
 │   └── events/                      # 13 类事件、JSON Schema、示例与检查器
+├── scripts/                        # 交付文件/本地引用检查
 └── .github/                         # master → CodeArts 单向同步
 ```
 
@@ -100,7 +103,7 @@ python -X utf8 contracts/http/validate_contracts.py
 
 每张任务卡写清目标、交付文件、验收条件和负责人。每个 PR 说明修改范围、关联任务和仍未确定的问题。契约变更应同步更新相关图与报告。
 
-当前交接：#71199997 的评审清单已合入；#71199999 本分支提供总体图和报告整合。合并并确认 GitHub/CodeArts `master` SHA 一致后，杨润东按 #71200000 在固定版本执行最终验收。各成员的规则/接口确认仍需实际记录；不能把合并或静态校验等同于全组确认。
+当前交接：#71199999 已通过 PR #9 合并；#71200000 已针对 CodeArts 候选 `b941b92a8a9b3be72f3575c0e6cdb877e6ee0b50` 执行自动检查与 Codex 辅助设计核对，见 [验收记录](docs/validation.md)。杨润东正式人工评审、全组规则/接口确认和另一位组员独立复核仍待实际记录；不能把合并或静态校验等同于全组确认。
 
 ## 交付状态
 
@@ -113,7 +116,8 @@ python -X utf8 contracts/http/validate_contracts.py
 - [x] CodeArts `lab2` 网页与 SSH 入口已补齐；本卡基线两端 master 相同，见检查记录。
 - [ ] 全组实际确认规则及接口，填写评审人、版本与结论。
 - [ ] 57 项人工评审执行并附证据；DRI-001 修复待复核，其他发现按台账跟踪。
-- [ ] 本卡合并后核对最终 GitHub / CodeArts master SHA，并由 #71200000 验收固定版本。
+- [x] #71200000 已核对固定设计候选的两端 SHA 并保存自动检查/辅助核对记录。
+- [ ] 完成正式人工评审及另一位成员独立复核；验收材料合并后再核对最终两端 SHA。
 - [ ] 组长按课程入口提交最终仓库、分支及完整 SHA 等要求材料。
 
 ## 仓库组织说明

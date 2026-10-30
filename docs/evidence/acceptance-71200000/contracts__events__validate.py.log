@@ -1,0 +1,2 @@
+PASS: 13 event types, schemas, example coverage and local field relationships
+Static contract checks only; no runtime, delivery, concurrency or performance result is claimed.

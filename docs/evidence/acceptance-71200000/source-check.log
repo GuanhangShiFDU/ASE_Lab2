@@ -1,0 +1,12 @@
+IMAGE architecture.png 3200 2680
+IMAGE docs/diagrams/data-model-ride.png 3568 1982
+IMAGE docs/diagrams/data-model-billing.png 1488 4836
+IMAGE docs/diagrams/data-model-support.png 3568 2776
+IMAGE docs/diagrams/quote-request-match.png 4786 7442
+IMAGE docs/diagrams/booking-recovery.png 4468 4242
+IMAGE docs/diagrams/cancel-rebook.png 4864 7790
+IMAGE docs/diagrams/cancellation-races.png 1934 4894
+IMAGE docs/diagrams/pickup-trip-payment.png 5512 6824
+IMAGE docs/diagrams/trip-payment-recovery.png 3712 7226
+PASS 21 Markdown files; 279 local references; 6 anchors; 10 PNG headers; 8 services; 18 interactions; 57 review IDs.
+Static artifact/reference checks only; image readability and business semantics require review.
