@@ -1,8 +1,8 @@
 # 设计图
 
-本目录用于保存可编辑图源和导出图。已提供三张逻辑数据模型图、#71199991 叫车主流程/恢复图及 #71199994 取消重叫/竞争恢复图；#71199995 接驾行程支付/异常恢复图；总体架构图待后续完成。
+本目录用于保存可编辑图源和导出图。已提供三张逻辑数据模型图、#71199991 叫车主流程/恢复图及 #71199994 取消重叫/竞争恢复图；#71199995 接驾行程支付/异常恢复图；总体架构 SVG 与根目录 PNG 已由 #71199999 提供。
 
-| 图 | 建议图源名 | 说明 |
+| 图 | 图源及导出 | 说明 |
 | --- | --- | --- |
 | 履约与分配模型 | [data-model-ride.mmd](data-model-ride.mmd) / [PNG](data-model-ride.png) | S-02 履约权威与 S-03 候选方案 |
 | 定价与收款模型 | [data-model-billing.mmd](data-model-billing.mmd) / [PNG](data-model-billing.png) | S-04 费用与 S-06 收款边界 |
@@ -13,15 +13,15 @@
 | 取消竞争与恢复 | [源](cancellation-races.mmd) / [PNG](cancellation-races.png) / [SVG](cancellation-races.svg) | 接单/上车竞争、费用同意上限与原键恢复 |
 | 接驾、行程与支付 | [源](pickup-trip-payment.mmd) / [PNG](pickup-trip-payment.png) / [SVG](pickup-trip-payment.svg) | 到达、上车开始、结束、计费与核验收款 |
 | 行程计费与支付恢复 | [源](trip-payment-recovery.mmd) / [PNG](trip-payment-recovery.png) / [SVG](trip-payment-recovery.svg) | 缺计量、未知付款、确定失败、重复/矛盾回调 |
-| 系统整体架构 | `architecture.mmd` | 汇总最终服务及主要交互，提供图例 |
+| 系统整体架构 | [可编辑 SVG](architecture.svg) / [根目录 PNG](../../architecture.png) | 三类客户端、八服务与存储、请求、事件、外部系统、峰值取舍及图例 |
 
-整体架构的文件名是后续约定，文件尚未创建。可使用 Mermaid，也可根据表达需要使用 `.drawio` 或 `.puml` 等图源，并相应调整引用。
+整体图采用可编辑 SVG；其余数据图/流程图保留 Mermaid 源。SVG 是整体图的维护源，不需要改动业务依赖。
 
 ## 导出与引用
 
 - 图源与导出图一并保留，确保后续可修改。
 - 数据模型、时序图等导出文件可放在本目录，并通过相对路径嵌入 [设计报告](../design.md)。
-- 整体架构图最终导出到仓库根目录 `architecture.png`。文件生成后，在报告中使用 `![系统整体架构图](../architecture.png)` 引用；还可以附加 SVG 等格式。
+- 整体架构图已导出到仓库根目录 `architecture.png`。报告使用 `![系统整体架构图](../architecture.png)` 引用，并链接可缩放 SVG。
 - 截图或导出后检查文字、线条和图例是否清晰，避免只提交图源链接而缺少报告中的可见图。
 - 服务名、ID、状态、接口方法和事件名以报告与契约中的一致定义为准。修改图时检查相关定义是否也需要更新。
 
@@ -68,3 +68,16 @@ done
 ## 接驾、行程与支付图导出
 
 #71199995 两图复用 `booking-render.json`；上述循环的图名使用 `pickup-trip-payment trip-payment-recovery`。PNG 嵌入报告，SVG 可放大阅读。接口与内部方法见 [接驾行程支付契约](../../contracts/http/trip-payment.md)。图表示设计顺序与恢复责任，不是运行日志。
+
+## 整体架构图导出
+
+维护 [architecture.svg](architecture.svg)，可用支持 SVG 的矢量编辑器或文本编辑器。A/B/C 是同一架构的三个视图，重复 ID 不是额外服务；细节以报告第 2～4 章和契约为准。新增服务/调用/事件时一并更新图例、报告对照表和契约。
+
+根目录 PNG 为 3200 × 2680。以下示例在仓库外安装导出依赖（Node.js >= 20.9.0，满足 sharp 0.35.5 的版本要求），避免引入业务 package.json。系统需有简体中文字体，例如 macOS 的 Hiragino Sans GB 或 Linux 的 Noto Sans CJK SC；否则先安装字体再导出。
+
+```bash
+npm install --prefix "$HOME/.cache/lab2-diagram-tools" --no-save --package-lock=false sharp@0.35.5
+NODE_PATH="$HOME/.cache/lab2-diagram-tools/node_modules" node docs/diagrams/export-architecture.cjs
+```
+
+`export-architecture.cjs` 使用相对自身的位置定位图源与目标，可从任意目录执行脚本；上面命令从仓库根目录运行。每次改图后重新导出并打开 PNG 核对中文、边界和箭头。字体/平台不同可能影响像素，应一起提交最终 SVG/PNG；不要仅改导出图。
