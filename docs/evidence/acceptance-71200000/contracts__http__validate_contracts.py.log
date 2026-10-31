@@ -1,0 +1,5 @@
+/private/tmp/lab2-card-71199991/check-env/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+PASS 28 public + 16 internal operations; 706 inline examples; 42 error-code mappings.
+PASS 6 diagrams: 42 request method names, 13 event names; 11 recovery operation types; 11 negative checks.
+Static syntax/examples/references only. Human review, authorization enforcement, transactions and channel integration are not executed.

@@ -1,0 +1,2 @@
+PASS 21 HTTP + 7 event examples; 29 chain checks; 28 invalid examples rejected.
+Static design checks only. No business service, payment channel or concurrent workflow was executed.
