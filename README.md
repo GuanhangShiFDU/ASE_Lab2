@@ -2,7 +2,7 @@
 
 2026 高级软件工程 · 第 22 小组
 
-> 当前阶段：四章设计报告、八服务与数据归属、三条核心流程、28 个客户端操作/16 个内部操作、13 类事件及总体架构图均已整合。57 项人工交叉评审和最终 CodeArts 版本验收仍待执行；本作业没有业务服务实现或性能测试结果。
+> 当前阶段：四章报告、八服务与数据归属、三条核心流程、28 个客户端操作/16 个内部操作、13 类事件和总体架构图已整合。规则、成员分工及材料阅读已由组长确认；技术检查与实际执行者见验收记录。当前进入收尾 PR 评审，合并后核对最终 CodeArts 版本。
 
 ## 作业范围
 
@@ -15,15 +15,15 @@
 
 ## 小组成员及分工
 
-沿用 Lab 1 成员及角色。以下区分已合入的材料、当前卡片交付与尚未执行的人工复核；PR 合并不代表全组已确认设计。
+沿用 Lab 1 成员及角色。下表记录各成员的材料贡献和复核分工；组长负责统筹规则决定与最终交付。2026-10-31，史冠航已核对并确认五人的姓名、学号和分工无误，见[确认记录](docs/validation.md#2026-10-31-成员与分工确认)。
 
 | 成员 | 学号 | 实际材料贡献与对应 PR | 后续人工复核 / 交付 |
 | --- | --- | --- | --- |
-| 史冠航（组长） | 26113050105 | #71199986 框架与同步；#71199988 领域规则 [PR #1](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/1)；本分支 #71199999 总体图、报告整合及交付导航 | 统筹规则讨论、图文一致性、最终课程提交 |
+| 史冠航（组长） | 26113050105 | #71199986 框架与同步；#71199988 领域规则 [PR #1](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/1)；#71199999 总体图、报告整合及交付导航 [PR #9](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/9) | 统筹规则讨论、图文一致性、最终课程提交 |
 | 刘乐翔 | 26113050085 | #71199991 客户端与叫车流程 [PR #4](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/4)；#71199996 核心接口 [PR #7](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/7) | 核对客户端反馈、取消费同意上限与异常恢复 |
 | 刘子扬 | 26113050091 | #71199990 通信与事件 [PR #3](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/3)；#71199994 取消/重叫 [PR #5](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/5) | 核对事件、幂等、状态竞争和数据边界 |
 | 李全昊 | 26113050071 | #71199989 服务与数据 [PR #2](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/2)；#71199995 接驾/行程/支付 [PR #6](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/6) | 核对事务、字段、权限及状态权威 |
-| 杨润东 | 26213050435 | #71199997 设计评审准备 [PR #8](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/8) | 执行逐项评审；#71200000 最终验收、问题跟踪及复核 |
+| 杨润东 | 26213050435 | #71199997 设计评审准备 [PR #8](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/8)；#71200000 固定版本验收材料 [PR #10](https://github.com/GuanhangShiFDU/ASE_Lab2/pull/10) | 配合技术复核及问题跟踪；剩余收尾由组长统筹 |
 
 任务入口：[Lab 2 总 Story #71199981](https://devcloud.cn-north-4.huaweicloud.com/projectman/scrum/c1aa0a224dba4c2591226b87a5af9407/task/detail/71199981)。
 
@@ -37,7 +37,7 @@
 - [绘图约定](docs/diagrams/README.md)：图源、导出文件及报告引用方式。
 - [契约入口](contracts/README.md)：核心接口与业务事件。
 - [总体架构 PNG](architecture.png) / [可编辑 SVG](docs/diagrams/architecture.svg)：三类客户端、八服务、数据归属、请求/事件及外部依赖。
-- [设计评审清单](docs/review-checklist.md) / [逐项结果](docs/review-results.md) / [问题台账](docs/review-issues.md)：人工执行后记录真实结论。
+- [设计评审清单](docs/review-checklist.md) / [逐项结果](docs/review-results.md) / [问题台账](docs/review-issues.md)：按实际执行者区分辅助技术核对与人员确认。
 - [#71200000 固定版本验收记录](docs/validation.md)：CodeArts 候选、自动日志、57 项辅助设计核对及真实待确认项。
 - [#71199999 整合检查及 QA 交接](docs/checks/architecture-71199999.md)：基线版本、检查结果和后续验收流程。
 
@@ -50,7 +50,7 @@ ASE_Lab2/
 │   ├── diagrams/                    # 整体 SVG、3 张数据图、6 张流程图及图源
 │   ├── checks/                      # 各卡真实静态检查记录
 │   ├── validation.md / evidence/    # 固定版本验收及原始证据
-│   └── review-*.md                  # 人工清单、结果、问题
+│   └── review-*.md                  # 评审清单、实际结果、问题
 ├── contracts/
 │   ├── http/                        # 公网/内部 OpenAPI、方法说明、示例与检查器
 │   └── events/                      # 13 类事件、JSON Schema、示例与检查器
@@ -103,22 +103,19 @@ python -X utf8 contracts/http/validate_contracts.py
 
 每张任务卡写清目标、交付文件、验收条件和负责人。每个 PR 说明修改范围、关联任务和仍未确定的问题。契约变更应同步更新相关图与报告。
 
-当前交接：#71199999 已通过 PR #9 合并；#71200000 已针对 CodeArts 候选 `b941b92a8a9b3be72f3575c0e6cdb877e6ee0b50` 执行自动检查与 Codex 辅助设计核对，见 [验收记录](docs/validation.md)。杨润东正式人工评审、全组规则/接口确认和另一位组员独立复核仍待实际记录；不能把合并或静态校验等同于全组确认。
+当前交接：PR #9、#10 已合并并同步。组长代表小组确认既有业务规则、成员分工和材料阅读，技术检查保留真实执行者与原始证据，见[验收记录](docs/validation.md)及[逐项结果](docs/review-results.md)。收尾分支合并后再核对最终两端 master。
 
 ## 交付状态
 
-以下已勾选项仅表示材料存在且本次完成静态整合检查；人工结论见逐项结果表。
-
-- [x] README 记录成员、实际材料贡献、PR 和后续职责。
-- [x] 四章报告包含领域规则、服务边界、逻辑模型、通信、三条流程及异常恢复。
-- [x] 核心 HTTP / 事件契约、示例与静态检查器齐备。
-- [x] 根目录 `architecture.png` 有图例，已嵌入报告，并保留可编辑图源。
-- [x] CodeArts `lab2` 网页与 SSH 入口已补齐；本卡基线两端 master 相同，见检查记录。
-- [ ] 全组实际确认规则及接口，填写评审人、版本与结论。
-- [ ] 57 项人工评审执行并附证据；DRI-001 修复待复核，其他发现按台账跟踪。
-- [x] #71200000 已核对固定设计候选的两端 SHA 并保存自动检查/辅助核对记录。
-- [ ] 完成正式人工评审及另一位成员独立复核；验收材料合并后再核对最终两端 SHA。
-- [ ] 组长按课程入口提交最终仓库、分支及完整 SHA 等要求材料。
+- [x] README 的五名成员、学号、分工与贡献 PR 已确认。
+- [x] 四章报告、逻辑模型、通信、三条流程及异常恢复齐备。
+- [x] 核心 HTTP / 事件契约、示例与静态检查记录齐备。
+- [x] 根目录 `architecture.png` 已嵌入报告，保留图源，阅读效果已确认。
+- [x] 组长代表小组确认 BR-01～BR-09，已记录日期、版本与课程对照。
+- [x] Codex 辅助核对与组长实际确认分别记录，DRI-001 已技术复核关闭。
+- [x] 组长从 CodeArts 克隆版 README 打开报告、总体图及契约，确认阅读入口正常。
+- [ ] 收尾 PR 评审合并后，核对 GitHub 与 CodeArts 最终 master 的完整 SHA。
+- [ ] 按课程安排完成最终仓库提交；不将 PR 合并等同于课程已提交。
 
 ## 仓库组织说明
 
